@@ -1,0 +1,20 @@
+{
+  "presets": [
+    [
+      "@babel/preset-react",
+      {
+        "runtime": "automatic",
+        "importSource": "@easythings/easy-view"
+      }
+    ]
+  ],
+  "plugins": [
+    [
+      "@babel/plugin-proposal-decorators",
+      {
+        "version": "2021-12",
+        "decoratorsBeforeExport": true
+      }
+    ]
+  ]
+}

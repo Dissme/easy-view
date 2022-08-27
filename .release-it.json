@@ -1,0 +1,30 @@
+{
+  "hooks": {
+    "before:release": ["npm run build"]
+  },
+  "git": {
+    "commitMessage": "chore(release): 更新版本至 ${version}"
+  },
+  "plugins": {
+    "@release-it/conventional-changelog": {
+      "infile": "CHANGELOG.md",
+      "preset": {
+        "name": "conventionalcommits",
+        "header": "# 📋 更新历史 \n\n",
+        "types": [
+          { "type": "feat", "section": "✨ 特性" },
+          { "type": "fix", "section": "🐛 Bug 修复" },
+          { "type": "perf", "section": "⚡ 性能优化" },
+          { "type": "revert", "section": "⏪ 回滚" },
+          { "type": "chore", "section": "📦 杂项" },
+          { "type": "docs", "section": "📝 文档" },
+          { "type": "style", "section": "💄 风格", "hidden": true },
+          { "type": "refactor", "section": "♻ 重构" },
+          { "type": "test", "section": "✅ 测试" },
+          { "type": "build", "section": "👷‍ 构建" },
+          { "type": "ci", "section": "🔧 CI 配置" }
+        ]
+      }
+    }
+  }
+}

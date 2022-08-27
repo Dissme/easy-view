@@ -1,0 +1,7 @@
+#!/bin/sh
+PATH=$PATH:/usr/local/bin:/usr/local/sbin
+
+. "$(dirname "$0")/_/husky.sh"
+
+npm run test:coverage
+npm run format
