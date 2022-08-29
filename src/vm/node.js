@@ -13,7 +13,7 @@ export const DIFF_TYPES = {
   move: 4
 };
 
-const IS_RENDER = Symbol("IS_RENDER");
+export const IS_RENDER = Symbol("IS_RENDER");
 export function defineRender(fn) {
   fn[IS_RENDER] = true;
   return fn;

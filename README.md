@@ -1,13 +1,15 @@
 # easy-view
 
-> 一个简单的MVP框架 UI和逻辑分离 支持运行在worker中 目前还不稳定
+> 一个简单的 MVP 框架 UI 和逻辑分离 支持运行在 worker 中 目前还不稳定
 
 ## 使用说明
+
 ```bash
 npm i @easythings/easy-view
 ```
 
 main.jsx
+
 ```jsx
 import { mount, mountFromPort } from "@easythings/easy-view";
 
@@ -33,9 +35,9 @@ mountFromPort(sharedWorker.port, container3); // sharedWorker用法
 ```
 
 worker.jsx/sharedWorker.jsx
+
 ```jsx
 import { render } from "@easythings/easy-view";
-import { defineRender } from "@easythings/easy-view/jsx-runtime";
 
 const listen = render(<WorkerComponent hello="world" />);
 
@@ -61,9 +63,9 @@ function WorkerComponent(props, children, eventHandlers, update) {
 
   const onClick = (e, next) => {
     i++;
-    console.log('事件从上向下')
+    console.log("事件从上向下");
     next();
-    console.log('再从下向上')
+    console.log("再从下向上");
   };
   const onClick2 = (e, next) => {
     console.log("可以用next(false)阻止向下");
@@ -73,14 +75,32 @@ function WorkerComponent(props, children, eventHandlers, update) {
   const onClick3 = (e, next) => {
     console.log("123321");
   };
-  // 如果不需要变量可以直接返回不用defineRender，后面我会弄个babel插件自动给代码加，就不用手动写了
-  return defineRender(() => (
+
+  return (
     <div on-click={onClick}>
       <div on-click={onClick2}>
         <div on-click={onClick3}>{i}</div>
       </div>
     </div>
-  ));
+  );
 }
 ```
-jsx插件配置 可以参考[这个文件](./.babelrc)
+
+.babelrc 需要配置下面的预设和插件
+
+```json
+{
+  "presets": [
+    [
+      "@babel/preset-react",
+      {
+        "runtime": "automatic",
+        "importSource": "@easythings/easy-view"
+      }
+    ]
+  ],
+  "plugins": [["@easythings/easy-view-jsx"]]
+}
+```
+
+## [CHANGELOG](./CHANGELOG.md)

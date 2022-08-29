@@ -1,4 +1,4 @@
-import { Node } from "../vm/node";
+import { IS_RENDER, Node } from "../vm/node";
 
 export function splitProps(props) {
   const result = {
@@ -23,8 +23,16 @@ export function splitProps(props) {
   return result;
 }
 
+function generateNodes(nodes) {
+  return nodes.map(node => {
+    if (typeof node === "function" && node[IS_RENDER])
+      return generateNodes([node()]);
+    if (Array.isArray(node)) return generateNodes(node);
+    return node;
+  });
+}
 export function flatNodes(nodes) {
-  return nodes
+  return generateNodes(nodes)
     .flat(Infinity)
     .filter(node => node !== null && node !== undefined);
 }
