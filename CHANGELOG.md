@@ -1,5 +1,12 @@
 
 
+## [0.2.0](https://github.com/Dissme/easy-view/compare/0.1.1...0.2.0) (2022-09-04)
+
+
+### ✨ 特性
+
+* 新增 Channel 类，统一通信协议；新增 MicroComponent 组件，提供微前端能力。 ([3429caf](https://github.com/Dissme/easy-view/commit/3429caf9ed79b6b9e2c6077c58da6d584a426675))
+
 ## [0.1.1](https://github.com/Dissme/easy-view/compare/0.1.0...0.1.1) (2022-08-29)
 
 
