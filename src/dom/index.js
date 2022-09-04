@@ -1,28 +1,8 @@
+import { Channel } from "../common/channel";
+import { DIFF_TYPES, EVENT_TYPES } from "../common/constants";
 import { render } from "../vm";
-import { DIFF_TYPES, STATES } from "../vm/node";
 import EventProxy from "./eventProxy";
-import { createFragment } from "./fragment";
-
-const stateClass = {
-  [STATES.fetching]: "fetching",
-  [STATES.resolved]: "resolved",
-  [STATES.failed]: "failed"
-};
-
-function setStateClass(element, state) {
-  if (!Reflect.has(element, "className") || state == undefined) return;
-  state = stateClass[state];
-  const classList = element.className.split(" ");
-  const reg = /^(fetching|resolved|failed)$/;
-  let replaced = false;
-  classList.forEach((className, index) => {
-    if (!reg.test(className)) return;
-    classList[index] = state;
-    replaced = true;
-  });
-  if (!replaced) classList.push(state);
-  element.className = classList.join(" ");
-}
+import { createFragment, stateClass } from "./fragment";
 
 function applyPatchs(patchs, container, nodeCache, eventProxy) {
   const cache = {};
@@ -38,16 +18,16 @@ function applyPatchs(patchs, container, nodeCache, eventProxy) {
         ele = document.createTextNode(text);
       } else if (_fragment) {
         ele = createFragment(id);
+        ele.className = stateClass[state];
       } else {
         ele = document.createElement(tag);
         Object.keys(props).forEach(key => {
           ele.setAttribute(key, props[key]);
         });
       }
-      setStateClass(ele, state);
       const [, parentId] = id.match(/(.*)?,([^,]+)$/) ?? [];
-
       insert(parentId, id, ele);
+
       cache[id] = ele;
       eventHandlers?.forEach?.(evtName => {
         if (!events[evtName]) events[evtName] = [];
@@ -55,6 +35,11 @@ function applyPatchs(patchs, container, nodeCache, eventProxy) {
       });
     },
     [DIFF_TYPES.delete]({ id }) {
+      const parent = nodeCache[id.replace(/,\d+$/, "")];
+      if (parent?._fragment) {
+        const index = parent.children.findIndex(n => n === nodeCache[id]);
+        if (index >= 0) parent.children.splice(index, 1);
+      }
       nodeCache[id].remove();
       const reg = new RegExp(`^${id}`);
       eventProxy.offWithRegExp(reg);
@@ -88,7 +73,7 @@ function applyPatchs(patchs, container, nodeCache, eventProxy) {
         });
       }
 
-      setStateClass(cur, state);
+      if (cur._fragment && stateClass[state]) cur.className = stateClass[state];
     },
     [DIFF_TYPES.move]({ id, payload: { id: tid } }) {
       const cur = nodeCache[id];
@@ -110,7 +95,7 @@ function applyPatchs(patchs, container, nodeCache, eventProxy) {
         Reflect.deleteProperty(nodeCache, key);
       });
     },
-    [DIFF_TYPES.connect]({ payload: { nodes } }) {
+    [DIFF_TYPES.connect]({ payload: nodes }) {
       nodes.forEach(
         ({ id, _text, text, _fragment, tag, props, state, eventHandlers }) => {
           let ele;
@@ -118,15 +103,14 @@ function applyPatchs(patchs, container, nodeCache, eventProxy) {
             ele = document.createTextNode(text);
           } else if (_fragment) {
             ele = createFragment(id);
+            stateClass[state] && (ele.className = stateClass[state]);
           } else {
             ele = document.createElement(tag);
             Object.keys(props).forEach(key => {
               ele.setAttribute(key, props[key]);
             });
           }
-          setStateClass(ele, state);
           const [, parentId] = id.match(/(.*)?,([^,]+)$/) ?? [];
-
           insert(parentId, id, ele);
           nodeCache[id] = ele;
           eventHandlers?.forEach?.(evtName => {
@@ -158,6 +142,7 @@ function applyPatchs(patchs, container, nodeCache, eventProxy) {
       });
     }
     frag.append(cur);
+    frag.$ele = cur;
     return frag;
   }
 
@@ -185,48 +170,17 @@ function applyPatchs(patchs, container, nodeCache, eventProxy) {
 }
 
 export function mountFromPort(port, container) {
-  let v = null;
-  const waitBuffer = {};
+  let inited = false;
   const nodeCache = {};
-
-  const callOut = body =>
-    port.postMessage({
-      body,
-      version: v
-    });
-
-  const eventProxy = new EventProxy(container, callOut);
-
-  port.onmessage = ({ data }) => {
-    const { body, version, lastVersion } = data;
-    if (body === undefined || body === null) return (v = version);
-    if (body === "connect") return (v = version);
-    waitBuffer[lastVersion] = data;
-    if (v) clearBuffer();
-  };
-
-  function clearBuffer() {
-    const versions = Object.keys(waitBuffer).sort((v1, v2) => {
-      const [t1, c1] = v1.split("-");
-      const [t2, c2] = v2.split("-");
-      const t = t1 - t2;
-      return t || c1 - c2;
-    });
-    const [t, c] = v.split("-");
-    while (versions.length) {
-      const version = versions.pop();
-      const [t2, c2] = version.split("-");
-      if (+t2 < +t || (t2 === t && +c2 < +c)) {
-        Reflect.deleteProperty(waitBuffer, version);
-        continue;
-      }
-      if (v !== version) return;
-      const cur = waitBuffer[version];
-      applyPatchs(cur.body, container, nodeCache, eventProxy);
-      v = cur.version;
-      Reflect.deleteProperty(waitBuffer, version);
-    }
-  }
+  const channel = new Channel();
+  const eventProxy = new EventProxy(container, body => {
+    channel.postMessage(EVENT_TYPES.call, body);
+  });
+  channel.register(EVENT_TYPES.patch, patchs => {
+    if (patchs[0].type === DIFF_TYPES.connect) inited = true;
+    if (inited) applyPatchs(patchs, container, nodeCache, eventProxy);
+  });
+  channel.connect(port);
 }
 
 export function mount(node, container) {

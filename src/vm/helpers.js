@@ -1,4 +1,4 @@
-import { IS_RENDER, Node } from "../vm/node";
+import { IS_RENDER, Node } from "./node";
 
 export function splitProps(props) {
   const result = {

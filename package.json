@@ -1,7 +1,7 @@
 {
   "name": "@easythings/easy-view",
   "version": "0.1.1",
-  "description": "一个简易的mvp框架",
+  "description": "一个从各种意义上来讲都很简单的 MVP 框架，UI 和逻辑分离，支持运行在 worker 等 js 容器中",
   "author": "344275632@qq.com",
   "license": "MIT",
   "type": "module",
@@ -74,7 +74,8 @@
   "keywords": [
     "easy",
     "view",
-    "mvp"
+    "mvp",
+    "jsx"
   ],
   "files": [
     "dist",

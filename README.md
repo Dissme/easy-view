@@ -1,6 +1,6 @@
 # easy-view
 
-> 一个简单的 MVP 框架 UI 和逻辑分离 支持运行在 worker 中 目前还不稳定
+> 一个从各种意义上来讲都很简单的 MVP 框架，UI 和逻辑分离，支持运行在 worker 等 js 容器中
 
 ## 使用说明
 
@@ -18,7 +18,7 @@ const sharedWorker = new SharedWorker(
   new URL("./sharedWorker.jsx", import.meta.url)
 );
 
-function Main(props, children, eventHandlers, update) {
+function Main(props, children, eventHandlers, hook) {
   return "Hello World";
 }
 
@@ -58,28 +58,39 @@ function init() {
   handler[platform]?.();
 }
 
-function WorkerComponent(props, children, eventHandlers, update) {
+function WorkerComponent(props, children, eventHandlers, hook) {
   let i = 0;
+  let j = 0;
+  let interval = setInterval(() => {
+    j++;
+    hook.dispatch("update"); // 发现view没有按照预期更新可以显式调用更新
+  }, 1000);
 
-  const onClick = (e, next) => {
+  hook.on("destroy", () => {
+    interval = clearInterval(interval); // 卸载时候要注意清除掉闭包里的引用等等
+  });
+
+  const onClick = next => {
     i++;
-    console.log("事件从上向下");
+    console.log("事件从上向下", next.event);
     next();
     console.log("再从下向上");
   };
-  const onClick2 = (e, next) => {
+  const onClick2 = next => {
     console.log("可以用next(false)阻止向下");
     next(false);
-    console.log(e, "但是从下往上没办法阻止");
+    console.log("但是从下往上没办法阻止");
   };
-  const onClick3 = (e, next) => {
+  const onClick3 = next => {
     console.log("123321");
   };
 
   return (
     <div on-click={onClick}>
       <div on-click={onClick2}>
-        <div on-click={onClick3}>{i}</div>
+        <div on-click={onClick3}>
+          {i}-{j}
+        </div>
       </div>
     </div>
   );

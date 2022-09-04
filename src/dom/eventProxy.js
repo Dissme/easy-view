@@ -45,11 +45,6 @@ export default class EventProxy {
     return removed;
   }
 
-  /**
-   *
-   * @param {Event} e
-   * @returns
-   */
   handler = e => {
     const { type, target } = e;
     if (!this.pool[type]) return;

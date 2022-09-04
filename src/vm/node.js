@@ -1,17 +1,12 @@
+import { DIFF_TYPES, EVENT_TYPES } from "../common/constants";
 import {
   debounce,
   flatNodes,
   sameChildren,
   sameNode,
   sameObj
-} from "../utils/helpers";
-
-export const DIFF_TYPES = {
-  create: 1,
-  update: 2,
-  delete: 3,
-  move: 4
-};
+} from "./helpers";
+import { Hook } from "./hook";
 
 export const IS_RENDER = Symbol("IS_RENDER");
 export function defineRender(fn) {
@@ -66,7 +61,6 @@ export class Node {
   }
 
   #fetchFlag = {};
-  watcher = null;
 
   id = "";
   key = null;
@@ -78,11 +72,18 @@ export class Node {
   state = STATES.resolved;
   updateHandler = null;
 
+  channel;
+  timer;
+  patchs = [];
+  hook = new Hook();
+
   constructor(initails) {
     Object.assign(this, initails);
+    this.hook.on("update", this.update);
   }
 
-  callInitail(cid) {
+  callInital(cid) {
+    if (!this.channel) throw "非法调用";
     const nodes = [];
     const rs = [this];
     while (rs.length) {
@@ -90,10 +91,17 @@ export class Node {
       rs.push(...(cur.results ?? []));
       nodes.push(Node.d2o(cur));
     }
-    this.callOut(this.id, DIFF_TYPES.connect, {
-      cid,
-      nodes
-    });
+    this.channel.postMessage(
+      EVENT_TYPES.patch,
+      [
+        {
+          id: this.id,
+          type: DIFF_TYPES.connect,
+          payload: nodes
+        }
+      ],
+      cid
+    );
   }
 
   setResults(results) {
@@ -102,7 +110,6 @@ export class Node {
       if (result instanceof Node) {
         if (result.id && result.id !== id) result.tid = id;
         else result.id = id;
-        result.watch(this.watcher);
       } else {
         result = { id, text: result, _text: true };
       }
@@ -110,9 +117,8 @@ export class Node {
     });
   }
 
-  emit(e) {
-    const canCall = e._userEvt || new RegExp(`^${this.id}`).test(e.id);
-
+  emit = (e, ...args) => {
+    const shouldCall = e._userEvt || new RegExp(`^${this.id}`).test(e.id);
     let called = false;
     let isCanceled = false;
     const next = isProgration => {
@@ -122,24 +128,37 @@ export class Node {
       if (!e._userEvt) this.results?.forEach(node => node.emit?.(e));
       this.update();
     };
-    if (canCall) {
-      const result = this.eventHandlers[e.type]?.(e, next);
+    if (shouldCall) {
+      next.event = e;
+      const fn = this.eventHandlers[e.type];
+      const result = e._userEvt ? fn?.(...args) : fn?.(next);
       result?.then(() => this.update());
       if (!called && !isCanceled) next();
       return result;
     }
-  }
-
-  watch(callBack) {
-    this.watcher = callBack;
-  }
-
-  offWatch() {
-    this.watcher = null;
-  }
+  };
 
   callOut(id, type, payload) {
-    this.watcher({ id, type, payload });
+    const last = this.patchs[this.patchs.length - 1];
+    if (
+      last?.id === id &&
+      last.type < DIFF_TYPES.delete &&
+      type === DIFF_TYPES.update
+    ) {
+      Object.assign(last.payload, payload);
+    } else {
+      this.patchs.push({ id, type, payload });
+    }
+
+    if (!this.timer) {
+      this.timer = Promise.resolve().then(() => {
+        if (this.channel) {
+          this.channel.postMessage(EVENT_TYPES.patch, this.patchs);
+        }
+        this.patchs = [];
+        this.timer = null;
+      });
+    }
   }
 
   cancel() {
@@ -288,6 +307,7 @@ export class Node {
     curResults.forEach(item => {
       if (item) {
         this.callOut(item.id, DIFF_TYPES.create, Node.d2o(item));
+        item.channel = this.channel;
         if (item.diff) nextDiffs.push(() => item.diff());
       }
     });
@@ -298,8 +318,8 @@ export class Node {
 
     lastResults.forEach(item => {
       if (item) {
-        item.cancel?.();
         this.callOut(item.id, DIFF_TYPES.delete);
+        item.destroy?.();
       }
     });
 
@@ -324,18 +344,21 @@ export class Node {
 
     const flag = {};
     this.#fetchFlag = flag;
-    this.state = STATES.fetching;
-    this.callOut(this.id, DIFF_TYPES.update, { state: this.state });
+    if (typeof this.tag === "function") {
+      this.state = STATES.fetching;
+      this.callOut(this.id, DIFF_TYPES.update, { state: this.state });
+    }
 
     try {
       let results =
         typeof this.tag !== "function"
           ? this.children
-          : await this.tag(
+          : await this.tag.call(
+              null,
               this.props,
               this.children,
               this.createUserEvtHanlers(),
-              this.update
+              this.hook
             );
       if (flag !== this.#fetchFlag) return new Promise(() => {});
       if (typeof results === "function" && results[IS_RENDER]) {
@@ -352,6 +375,14 @@ export class Node {
       this.cancel();
       this.state = STATES.failed;
     }
-    this.callOut(this.id, DIFF_TYPES.update, { state: this.state });
+    if (typeof this.tag === "function") {
+      this.callOut(this.id, DIFF_TYPES.update, { state: this.state });
+    }
+  }
+
+  destroy() {
+    this.cancel?.();
+    this.hook.dispatch("destroy");
+    this.channel = null;
   }
 }

@@ -1,17 +1,27 @@
-import { VMChannel } from "./channel";
+import GroupChannel from "../common/channel";
+import { EVENT_TYPES } from "../common/constants";
 
 export function render(node) {
-  const onMessage = data => {
-    node.emit(data);
-  };
-  const channel = new VMChannel(onMessage);
+  const channel = new GroupChannel();
+  listen.channel = channel;
 
   node.id = ",0";
-  node.watch(channel.callOut);
+  node.channel = channel;
   node.diff();
 
-  return port => {
-    const cid = channel.addPort(port);
-    node.callInitail(cid);
-  };
+  return listen;
+
+  function listen(port) {
+    const cid = channel.connect(port);
+    channel.register(EVENT_TYPES.connect, () => node.callInital(cid), cid);
+    channel.register(
+      EVENT_TYPES.call,
+      body => {
+        body.cid = cid;
+        node.emit(body);
+      },
+      cid
+    );
+    return cid;
+  }
 }

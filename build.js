@@ -16,7 +16,6 @@ imports.forEach(async ({ entry, name }) => {
     base: "./",
     plugins: [babel()],
     build: {
-      minify: false,
       lib: {
         entry,
         name,
