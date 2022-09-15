@@ -1,3 +1,17 @@
+const formatters = {
+  input(e) {
+    const target = e.target;
+    let value = target.value;
+    if (target.isContentEditable) {
+      value = target.innerHTML;
+    }
+    return { value };
+  }
+};
+export function setFormater(type, fn) {
+  formatters[type] = fn;
+}
+
 export default class EventProxy {
   pool = {};
   ele;
@@ -55,15 +69,15 @@ export default class EventProxy {
     }
 
     this.callOut({
-      ...this.copyEvent(e),
-      _domEvt: true,
-      type,
-      id: srcId
+      detail: Object.assign((formatters[type] || this.copyEvent)(e), {
+        _eid: srcId
+      }),
+      type
     });
   };
 
   copyEvent(e) {
-    const validTypes = ["boolean", "string", "number", "undefined"];
+    const validTypes = ["boolean", "string", "number"];
     const result = {};
     for (const key in e) {
       if (validTypes.includes(typeof e[key])) {

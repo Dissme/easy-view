@@ -6,8 +6,14 @@ import babel from "vite-plugin-babel";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const imports = [
-  { entry: path.resolve(__dirname, "src/index.js"), name: "easyView" },
-  { entry: path.resolve(__dirname, "src/jsx-runtime.js"), name: "jsx-runtime" }
+  {
+    entry: path.resolve(__dirname, "src/dom/index.js"),
+    name: "easy-view"
+  },
+  {
+    entry: path.resolve(__dirname, "src/vm/index.js"),
+    name: "jsx-runtime"
+  }
 ];
 
 imports.forEach(async ({ entry, name }) => {
@@ -19,13 +25,8 @@ imports.forEach(async ({ entry, name }) => {
       lib: {
         entry,
         name,
-        formats: ["es", "umd"]
-      },
-      rollupOptions: {
-        output: {
-          assetFileNames: `${name}.[ext]`,
-          entryFileNames: () => "[name].[format].js"
-        }
+        formats: ["es", "umd"],
+        fileName: format => `${name}.${format}.js`
       }
     }
   });

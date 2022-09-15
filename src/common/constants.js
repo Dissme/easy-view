@@ -13,3 +13,9 @@ export const DIFF_TYPES = {
   move: 4,
   connect: 5
 };
+
+export const NODE_STATES = {
+  fetching: 1,
+  resolved: 2,
+  failed: 3
+};

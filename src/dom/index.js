@@ -1,6 +1,6 @@
 import { Channel } from "../common/channel";
+import { render } from "../common/render";
 import { DIFF_TYPES, EVENT_TYPES } from "../common/constants";
-import { render } from "../vm";
 import EventProxy from "./eventProxy";
 import { createFragment, stateClass } from "./fragment";
 
@@ -181,6 +181,7 @@ export function mountFromPort(port, container) {
     if (inited) applyPatchs(patchs, container, nodeCache, eventProxy);
   });
   channel.connect(port);
+  return channel;
 }
 
 export function mount(node, container) {
@@ -188,3 +189,6 @@ export function mount(node, container) {
   mountFromPort(port1, container);
   render(node)(port2);
 }
+
+export { setFormater } from "./eventProxy";
+export { render };

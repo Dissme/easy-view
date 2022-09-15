@@ -1,27 +1,25 @@
-import GroupChannel from "../common/channel";
-import { EVENT_TYPES } from "../common/constants";
+import { flatNodes, splitProps } from "./helpers";
+import { Micro, MicroComponent } from "./micro";
+import { Node } from "./node";
 
-export function render(node) {
-  const channel = new GroupChannel();
-  listen.channel = channel;
+export { Fragment, defineRender } from "./node";
+export { MicroComponent };
 
-  node.id = ",0";
-  node.channel = channel;
-  node.diff();
-
-  return listen;
-
-  function listen(port) {
-    const cid = channel.connect(port);
-    channel.register(EVENT_TYPES.connect, () => node.callInital(cid), cid);
-    channel.register(
-      EVENT_TYPES.call,
-      body => {
-        body.cid = cid;
-        node.emit(body);
-      },
-      cid
-    );
-    return cid;
+export function jsxs(tag, options) {
+  if (typeof tag !== "function" && typeof tag !== "string") {
+    throw new TypeError(`意外的tag类型<${tag}>`);
   }
+
+  const Constructor = tag === MicroComponent ? Micro : Node;
+
+  let { children, eventHandlers, props, key } = splitProps(options);
+
+  children = flatNodes(children);
+
+  return new Constructor({ tag, props, children, eventHandlers, key });
+}
+
+export function jsx(tag, options) {
+  options.children = [options.children];
+  return jsxs(tag, options);
 }

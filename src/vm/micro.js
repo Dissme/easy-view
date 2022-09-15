@@ -31,16 +31,20 @@ export class Micro extends Node {
     );
   };
 
-  emit = e => {
+  emit(e) {
     const reg = new RegExp(`^${this.id}`);
-    const shouldCall = reg.test(e.id);
-    if (shouldCall) {
-      this.microChannel.postMessage(EVENT_TYPES.call, {
-        ...e,
-        id: e.id.replace(reg, "")
-      });
-    }
-  };
+    const shouldCall = reg.test(e.detail._eid);
+    if (!shouldCall) return;
+
+    this.microChannel.postMessage(EVENT_TYPES.call, {
+      ...e,
+      detail: {
+        ...e.detail,
+        _eid: e.detail._eid.replace(reg, "")
+      }
+    });
+    return super.emit(e);
+  }
 
   destroy() {
     super.destroy();

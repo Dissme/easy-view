@@ -5,12 +5,12 @@
   "author": "344275632@qq.com",
   "license": "MIT",
   "type": "module",
-  "main": "./dist/index.es.js",
-  "module": "./dist/index.es.js",
+  "main": "./dist/easy-view.es.js",
+  "module": "./dist/easy-view.es.js",
   "exports": {
     ".": {
-      "import": "./dist/index.es.js",
-      "require": "./dist/index.umd.js"
+      "import": "./dist/easy-view.es.js",
+      "require": "./dist/easy-view.umd.js"
     },
     "./jsx-runtime": {
       "import": "./dist/jsx-runtime.es.js",

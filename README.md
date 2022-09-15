@@ -11,7 +11,7 @@ npm i @easythings/easy-view
 main.jsx
 
 ```jsx
-import { mount, mountFromPort } from "@easythings/easy-view";
+import { mount, mountFromPort, setFormater } from "@easythings/easy-view";
 
 const worker = new Worker(new URL("./worker.jsx", import.meta.url));
 const sharedWorker = new SharedWorker(
@@ -58,7 +58,7 @@ function init() {
   handler[platform]?.();
 }
 
-function WorkerComponent(props, children, eventHandlers, hook) {
+function WorkerComponent(props, children, hook) {
   let i = 0;
   let j = 0;
   let interval = setInterval(() => {
@@ -70,27 +70,25 @@ function WorkerComponent(props, children, eventHandlers, hook) {
     interval = clearInterval(interval); // 卸载时候要注意清除掉闭包里的引用等等
   });
 
-  const onClick = next => {
+  const onClick = e => {
+    console.log('1111');
     i++;
-    console.log("事件从上向下", next.event);
-    next();
-    console.log("再从下向上");
   };
-  const onClick2 = next => {
-    console.log("可以用next(false)阻止向下");
-    next(false);
-    console.log("但是从下往上没办法阻止");
+
+  const onClick2 = e => {
+    console.log('2222');
+    e.stopPropagation();
   };
-  const onClick3 = next => {
-    console.log("123321");
+
+  const onClick3 = e => {
+    console.log('3333');
   };
 
   return (
-    <div on-click={onClick}>
-      <div on-click={onClick2}>
-        <div on-click={onClick3}>
-          {i}-{j}
-        </div>
+    {/** 事件捕获在事件后面加_capture后缀 */}
+    <div on-click={onClick} on-click_capture={onClick2}>
+      <div on-click_capture={onClick3}>
+        {i}-{j}
       </div>
     </div>
   );

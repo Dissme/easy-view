@@ -1,9 +1,9 @@
-import { STATES } from "../vm/node";
+import { NODE_STATES } from "../common/constants";
 
 export const stateClass = {
-  [STATES.fetching]: "e-fetching",
-  [STATES.resolved]: "e-resolved",
-  [STATES.failed]: "e-failed"
+  [NODE_STATES.fetching]: "e-fetching",
+  [NODE_STATES.resolved]: "e-resolved",
+  [NODE_STATES.failed]: "e-failed"
 };
 
 const classReg = new RegExp(`${Object.values(stateClass).join("|")}|$`);
