@@ -1,5 +1,12 @@
 
 
+## [0.2.1](https://github.com/Dissme/easy-view/compare/0.2.0...0.2.1) (2022-09-15)
+
+
+### ♻ 重构
+
+* **jsx-runtime:** 重构了事件流，调整了API。 ([7169cd7](https://github.com/Dissme/easy-view/commit/7169cd767962fa62d1382ee4ee51d44c0f538999))
+
 ## [0.2.0](https://github.com/Dissme/easy-view/compare/0.1.1...0.2.0) (2022-09-04)
 
 
