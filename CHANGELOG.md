@@ -1,5 +1,12 @@
 
 
+## [0.2.2](https://github.com/Dissme/easy-view/compare/0.2.1...0.2.2) (2022-09-24)
+
+
+### 🐛 Bug 修复
+
+* 修复组件会覆盖子节点class的bug，修复重构时遗漏的method引用导致的undefined的bug ([6f9b6d5](https://github.com/Dissme/easy-view/commit/6f9b6d5a6ebfa8229846d10b4cea31e2db9b7fca))
+
 ## [0.2.1](https://github.com/Dissme/easy-view/compare/0.2.0...0.2.1) (2022-09-15)
 
 
