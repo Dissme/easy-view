@@ -109,7 +109,7 @@ export class Node {
     while (rs.length) {
       const cur = rs.shift();
       rs.push(...(cur.results ?? []));
-      nodes.push(Node.d2o(cur));
+      nodes.push(Node.node2obj(cur));
     }
     this.channel.postMessage(
       EVENT_TYPES.patch,
@@ -125,8 +125,8 @@ export class Node {
   }
 
   emit(e) {
-    const isUserEvt = !e.detail._eid;
-    const shouldCall = new RegExp(`^${this.id}`).test(e.detail._eid);
+    const isUserEvt = !e.detail?._eid;
+    const shouldCall = new RegExp(`^${this.id}`).test(e.detail?._eid);
     if (!isUserEvt && !shouldCall) return;
     const eventName = e.type.replace(/(_capture)?$/, "");
     const captureName = `${eventName}_capture`;

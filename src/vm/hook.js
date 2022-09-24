@@ -24,7 +24,7 @@ export class Hook {
     });
   }
 
-  #remove(type, listeners) {
+  #remove(type, listeners = []) {
     listeners.forEach(listener => {
       this.target.removeEventListener(type, listener);
     });

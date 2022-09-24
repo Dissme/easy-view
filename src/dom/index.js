@@ -4,6 +4,12 @@ import { DIFF_TYPES, EVENT_TYPES } from "../common/constants";
 import EventProxy from "./eventProxy";
 import { createFragment, stateClass } from "./fragment";
 
+function filterProps(props) {
+  if (!props) return;
+  props.class = props.className;
+  Reflect.deleteProperty(props, "className");
+}
+
 function applyPatchs(patchs, container, nodeCache, eventProxy) {
   const cache = {};
   const events = {};
@@ -13,12 +19,13 @@ function applyPatchs(patchs, container, nodeCache, eventProxy) {
       id,
       payload: { _text, text, _fragment, tag, props, state, eventHandlers }
     }) {
+      filterProps(props);
       let ele;
       if (_text) {
         ele = document.createTextNode(text);
       } else if (_fragment) {
         ele = createFragment(id);
-        ele.className = stateClass[state];
+        stateClass[state] && (ele.className = stateClass[state]);
       } else {
         ele = document.createElement(tag);
         Object.keys(props).forEach(key => {
@@ -52,6 +59,7 @@ function applyPatchs(patchs, container, nodeCache, eventProxy) {
       id,
       payload: { state, props, eventHandlers, text }
     }) {
+      filterProps(props);
       const cur = nodeCache[id];
       if (cur instanceof Text) cur.textContent = text;
       if (props && cur.setAttribute) {
@@ -98,6 +106,7 @@ function applyPatchs(patchs, container, nodeCache, eventProxy) {
     [DIFF_TYPES.connect]({ payload: nodes }) {
       nodes.forEach(
         ({ id, _text, text, _fragment, tag, props, state, eventHandlers }) => {
+          filterProps(props);
           let ele;
           if (_text) {
             ele = document.createTextNode(text);

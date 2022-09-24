@@ -22,6 +22,7 @@ imports.forEach(async ({ entry, name }) => {
     base: "./",
     plugins: [babel()],
     build: {
+      minify: "none",
       lib: {
         entry,
         name,

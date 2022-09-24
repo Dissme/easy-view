@@ -48,7 +48,10 @@ const mix = {
     children.forEach(child => {
       frag.append(child);
       this.children.push(child);
-      child.className = this.className;
+      child.className = (child.className ?? "").replace(
+        classReg,
+        this.className
+      );
     });
 
     this.parentNode.insertBefore(frag, this);
