@@ -1,96 +1,114 @@
-const formatters = {
-  input(e) {
-    const target = e.target;
-    let value = target.value;
-    if (target.isContentEditable) {
-      value = target.innerHTML;
-    }
-    return { value };
-  }
-};
-export function setFormater(type, fn) {
-  formatters[type] = fn;
-}
+const plugins = {};
 
-export default class EventProxy {
-  pool = {};
+export function use(options) {
+  Object.assign(plugins, options);
+}
+export class EventProxy {
   ele;
   callOut;
+  pool = {};
 
   constructor(ele, callOut) {
     this.ele = ele;
     this.callOut = callOut;
   }
 
-  on(evtName, id) {
-    if (!this.pool[evtName]) {
-      this.pool[evtName] = new Set();
-      this.ele.addEventListener(evtName, this.handler);
-    }
-    this.pool[evtName].add(id);
-  }
+  defaultUnbind() {}
 
-  off(evtName, id) {
-    if (evtName === "*") {
-      return Object.keys(this.pool).forEach(key => {
-        this.pool[key]?.delete?.(id);
-      });
-    }
-    if (!this.pool[evtName]) return;
-    if (this.pool[evtName]) this.pool[evtName].delete(id);
-    if (this.pool[evtName].size) {
-      this.ele.removeEventListener(evtName, this.handler);
-    }
-  }
-
-  offWithRegExp(reg) {
-    let removed = {};
-    Object.keys(this.pool).forEach(evtName => {
-      if (!this.pool[evtName]) return;
-      const ids = [];
-      this.pool[evtName].forEach(id => {
-        if (reg.test(id)) {
-          (removed[evtName] || (removed[evtName] = [])).push(id);
-          ids.push(id);
-        }
-      });
-      ids.forEach(id => this.off("*", id));
+  getEventNames(id) {
+    const result = {};
+    Object.keys(this.pool).forEach(eventName => {
+      if (this.pool[eventName][id]) result[eventName] = true;
     });
-    return removed;
+    return result;
+  }
+
+  on(eventName, id, target) {
+    if (!this.pool[eventName]) {
+      this.pool[eventName] = {};
+      this.ele.addEventListener(eventName, this.handler);
+    }
+
+    if (this.pool[eventName][id]) return this.pool[eventName][id];
+
+    let off =
+      plugins[eventName]?.call?.(
+        this.ele,
+        target,
+        this.dispatch.bind(null, eventName, target)
+      ) ?? this.defaultUnbind;
+
+    this.pool[eventName][id] = off;
+    return off;
+  }
+
+  move(curId, nextId) {
+    Object.keys(this.pool).forEach(eventName => {
+      const off = this.pool[eventName][curId];
+      if (!off) return;
+      this.pool[eventName][nextId] = off;
+      Reflect.deleteProperty(this.pool[eventName], curId);
+    });
+  }
+
+  off(eventName, id) {
+    if (eventName === "*") {
+      return Object.keys(this.pool).filter(name => {
+        if (!this.pool[name][id]) return;
+        this.off(name, id);
+        return true;
+      });
+    }
+
+    if (!this.pool[eventName]) return;
+    if (this.pool[eventName][id]) {
+      this.pool[eventName][id]();
+      Reflect.deleteProperty(this.pool[eventName], id);
+    }
+    if (!Object.keys(this.pool[eventName]).length) {
+      this.ele.removeEventListener(eventName, this.handler);
+      Reflect.deleteProperty(this.pool, eventName);
+    }
   }
 
   handler = e => {
-    const { type, target } = e;
+    let { type, detail, target } = e;
     if (!this.pool[type]) return;
     let srcId = null;
-    for (const id of this.pool[type]) {
-      if (!isChild(id, target?.getAttribute?.("_eid"))) continue;
+
+    Object.keys(this.pool[type]).forEach(id => {
+      if (!isChild(id, target?.getAttribute?.("_eid"))) return;
       if (!srcId || srcId.length < id.length) srcId = id;
-    }
+    });
+
+    if (!srcId) return;
+
+    if (plugins[type]?.format) detail = plugins[type].format(e);
+    if (detail === undefined || detail === null) detail = {};
+    if (typeof detail !== "object") detail = { value: detail };
+    detail._eid = srcId;
 
     this.callOut({
-      detail: Object.assign((formatters[type] || this.copyEvent)(e), {
-        _eid: srcId
-      }),
-      type
+      type,
+      detail
     });
   };
 
-  copyEvent(e) {
-    const validTypes = ["boolean", "string", "number"];
-    const result = {};
-    for (const key in e) {
-      if (validTypes.includes(typeof e[key])) {
-        result[key] = e[key];
-      }
-    }
-    return result;
+  dispatch(type, target, detail) {
+    target.dispatchEvent(
+      new CustomEvent(type, {
+        bubbles: true,
+        detail
+      })
+    );
   }
 
   destroy() {
     Object.keys(this.pool).forEach(key => {
+      Object.keys(this.pool[key]).forEach(off => off());
       this.ele.removeEventListener(key, this.handler);
     });
+    this.pool = null;
     this.ele = null;
   }
 }

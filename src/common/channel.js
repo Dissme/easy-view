@@ -1,5 +1,95 @@
 import { EVENT_TYPES } from "./constants";
-import { MultiKeyMap } from "./utils";
+import { Hook } from "./hook";
+import { WriteStream, ReadStream } from "./stream";
+
+export class Channel {
+  #writeStream;
+  #readStream;
+  #handlers = {};
+  destroyed = true;
+
+  connect(port) {
+    if (!this.destroyed) this.destroy();
+    this.#readStream = ReadStream.getInstance(port);
+    this.#writeStream = WriteStream.getInstance(port);
+    this.destroyed = false;
+  }
+
+  register(type, handler) {
+    this.#handlers[type] = e => handler(e?.detail);
+    this.#readStream.register(type, this.#handlers[type]);
+  }
+
+  postMessage(type, body) {
+    const prev = this.#writeStream.version;
+    this.#writeStream.postMessage({
+      type,
+      body
+    });
+    return prev;
+  }
+
+  destroy() {
+    if (this.destroyed) return;
+    this.postMessage(EVENT_TYPES.destroy);
+    Object.keys(this.#handlers, type => {
+      this.#readStream.unregister(type, this.#handlers[type]);
+    });
+    this.#handlers = {};
+    this.#writeStream = null;
+    this.#readStream = null;
+  }
+}
+
+export class MethodChannel extends Channel {
+  #handlers = {};
+  #resolvers = new Hook();
+
+  timeout = 3000;
+
+  connect(port) {
+    super.connect(port);
+    super.register(EVENT_TYPES.send, this.#onSend);
+    super.register(EVENT_TYPES.receipt, this.#onReceipt);
+    super.register(EVENT_TYPES.userCall, this.#onUserCall);
+  }
+
+  #onSend = async ({ body: { methodName, params }, prev }) => {
+    const result = await this.#handlers[methodName]?.call?.(null, params);
+    super.postMessage(EVENT_TYPES.receipt, { result, prev });
+  };
+
+  #onReceipt = ({ body: { result, prev } }) => {
+    this.#resolvers.dispatch(prev, result);
+  };
+
+  #onUserCall = ({ body: { methodName, params } }) => {
+    this.#handlers[methodName]?.call?.(null, params);
+  };
+
+  register(methodName, method) {
+    this.#handlers[methodName] = method;
+  }
+
+  unregister(methodName) {
+    Reflect.deleteProperty(this.#handlers, methodName);
+  }
+
+  postMessage(methodName, params) {
+    super.postMessage(EVENT_TYPES.userCall, { methodName, params });
+  }
+
+  sendMessage(methodName, params) {
+    const prev = super.postMessage(EVENT_TYPES.send, { methodName, params });
+    return new Promise((resolve, reject) => {
+      this.#resolvers.once(prev, ({ detail }) => resolve(detail));
+      setTimeout(() => {
+        this.#resolvers.off(prev);
+        reject("timeout");
+      }, this.timeout);
+    });
+  }
+}
 
 export default class GroupChannel {
   #channels = [];
@@ -10,170 +100,29 @@ export default class GroupChannel {
     return this.#channels.push(channel) - 1;
   }
 
+  disconnect(cid) {
+    this.#channels[cid]?.destroy?.();
+    this.#channels[cid] = null;
+  }
+
   postMessage(type, body, ...cids) {
     let channels = this.#channels;
-    if (cids.length) channels = channels.filter((_, cid) => cids.includes(cid));
+    if (cids.length) {
+      channels = channels.filter(
+        (channel, cid) => channel && cids.includes(cid)
+      );
+    }
     channels.forEach(channel => {
       channel.postMessage(type, body);
     });
   }
 
-  sendMessage(type, body, cid) {
-    return this.#channels[cid].sendMessage(type, body);
-  }
-
   register(type, handler, cid) {
     this.#channels[cid]?.register(type, handler);
   }
-}
-
-export class Channel {
-  #writeStrream;
-  #readStream;
-
-  #handlers = {};
-  #resolvers = new MultiKeyMap();
-
-  #messageHandler = async ({ type, body }) => {
-    if (EVENT_TYPES.send === type) {
-      const version = this.#readStream.version;
-      const result = await this.#handlers[body.type]?.(body.body);
-      this.postMessage(EVENT_TYPES.callBack, {
-        version,
-        type: body.type,
-        result
-      });
-    } else if (EVENT_TYPES.receipt === type) {
-      this.#resolvers.get(body.version, body.type)?.(body.result);
-      this.#resolvers.delete(body.version, body.type);
-    } else {
-      this.#handlers[type]?.(body);
-    }
-  };
-
-  connect(port) {
-    this.#writeStrream = new WriteStrream(port);
-    this.#readStream = new ReadStream(port, this.#messageHandler);
-    this.#writeStrream.postMessage(EVENT_TYPES.connect);
-  }
-
-  register(type, handler) {
-    this.#handlers[type] = handler;
-  }
-
-  postMessage(type, body) {
-    this.#writeStrream.postMessage(type, body);
-  }
-
-  sendMessage(type, body) {
-    const version = this.#writeStrream.postMessage(EVENT_TYPES.send, {
-      type,
-      body
-    });
-    return new Promise(r => this.#resolvers.set(version, type)(r));
-  }
 
   destroy() {
-    this.#writeStrream = this.#writeStrream.destroy();
-    this.#readStream = this.#readStream.destroy();
-  }
-}
-
-class WriteStrream {
-  lastTime = performance.now();
-  count = 0;
-  port;
-
-  get version() {
-    return `${this.lastTime}-${this.count}`;
-  }
-
-  constructor(port) {
-    this.port = port;
-  }
-
-  postMessage(type, body) {
-    this.port.postMessage({
-      type,
-      body,
-      lastVersion: this.version,
-      version: this.updateVersion()
-    });
-    return this.version;
-  }
-
-  updateVersion() {
-    const time = performance.now();
-    if (time !== this.lastTime) {
-      this.lastTime = time;
-      this.count = 0;
-    } else {
-      this.count++;
-    }
-    return this.version;
-  }
-
-  destroy() {
-    this.port = null;
-  }
-}
-
-class ReadStream {
-  version;
-  buffer = {};
-  inputHandler;
-  port;
-
-  constructor(port, inputHandler) {
-    port.addEventListener("message", this.messageHandler);
-    this.port = port;
-    this.inputHandler = inputHandler;
-    port.start?.();
-  }
-
-  messageHandler = ({ data }) => {
-    const { type, version, lastVersion } = data;
-    if (type === EVENT_TYPES.connect) {
-      this.version = version;
-      this.inputHandler({ type });
-    } else {
-      this.buffer[lastVersion] = data;
-    }
-    this.readBuffer();
-  };
-
-  readBuffer() {
-    if (!this.version) return;
-    const versions = Object.keys(this.buffer).sort((v1, v2) => {
-      const [t1, c1] = v1.split("-");
-      const [t2, c2] = v2.split("-");
-      const t = t1 - t2;
-      return t || c1 - c2;
-    });
-
-    const [t, c] = this.version.split("-");
-
-    while (versions.length) {
-      const version = versions.pop();
-      const [t2, c2] = version.split("-");
-      if (+t2 < +t || (t2 === t && +c2 < +c)) {
-        Reflect.deleteProperty(this.buffer, version);
-        continue;
-      }
-      if (this.version !== version) return;
-      const { type, body, version: cur } = this.buffer[version];
-      this.version = cur;
-      Reflect.deleteProperty(this.buffer, version);
-      this.inputHandler({ type, body });
-    }
-  }
-
-  destroy() {
-    this.buffer = null;
-    this.inputHandler = null;
-    this.port.removeEventListener("message", this.messageHandler);
-    this.port.close?.();
-    this.port.terminate?.();
-    this.port = null;
+    this.#channels.forEach(channel => channel?.destroy?.());
+    this.#channels = [];
   }
 }

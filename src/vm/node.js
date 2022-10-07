@@ -1,12 +1,8 @@
-import { DIFF_TYPES, EVENT_TYPES, NODE_STATES } from "../common/constants";
-import {
-  debounce,
-  flatNodes,
-  sameChildren,
-  sameNode,
-  sameObj
-} from "./helpers";
-import { Hook } from "./hook";
+import { DIFF_TYPES, EVENT_TYPES } from "../common/constants";
+import { debounce, flatNodes } from "./helpers";
+import { Hook } from "../common/hook";
+import phase from "./phase";
+import { diff } from "./diff";
 
 export const IS_RENDER = Symbol("IS_RENDER");
 export function defineRender(fn) {
@@ -20,6 +16,7 @@ export function Fragment(props, children = []) {
 
 export class Node {
   static filterProps(props) {
+    if (!props) return;
     const validTypes = ["boolean", "string", "number"];
     return Object.keys(props).reduce(
       (obj, key) =>
@@ -31,10 +28,11 @@ export class Node {
   }
 
   static filterEventHandlers(eventHandlers) {
+    if (!eventHandlers) return;
     return [
       ...new Set(
         Object.keys(eventHandlers).map(evtName =>
-          evtName.replace(/(_capture)?$/, "")
+          evtName.replace(/_capture$/, "")
         )
       )
     ];
@@ -44,7 +42,6 @@ export class Node {
     if (node instanceof Node) {
       node = {
         id: node.id,
-        state: node.state,
         tag: typeof node.tag === "function" ? node.tag.name : node.tag,
         props: this.filterProps(node.props),
         eventHandlers: this.filterEventHandlers(node.eventHandlers),
@@ -61,18 +58,15 @@ export class Node {
   }
 
   parent;
+  destroyed = false;
+  $scope = new Set();
   index = 0;
-  state = NODE_STATES.resolved;
   hook = new Hook();
   updateHandler;
 
   channel;
   patchs = [];
-  timer;
 
-  fetchFlag = {};
-
-  /** @type {String|(props, children, eventHandlers, hook) => Promise<Function|Node>} */
   tag = Fragment;
   key;
   children = [];
@@ -91,19 +85,60 @@ export class Node {
     this.bindEventHandlers();
   }
 
-  update = debounce(() => {
-    if (this.state === NODE_STATES.fetching) return;
-    this.diff();
-  });
-
-  destroy = () => {
-    this.parent = null;
-    this.channel = null;
-    this.offBindEventHandlers();
+  update = force => {
+    phase.add(this, force);
   };
 
+  destroy = () => {
+    phase.delete(this);
+    this.destroyed = true;
+    this.parent = null;
+    this.$scope.clear();
+    this.channel = null;
+    this.offBindEventHandlers();
+    this.results.forEach(node => node.emit?.({ type: "destroy" }));
+  };
+
+  userHook = new Proxy(
+    {},
+    {
+      get: (target, type) => {
+        type = type.replace(/_capture$/, "");
+
+        const dispatch = detail => {
+          this.emit({ type, detail });
+        };
+        const before = cb => this.hook.on(`${type}_capture`, cb);
+
+        Object.assign(before, {
+          once: cb => {
+            this.hook.once(`${type}_capture`, cb);
+          },
+          off: cb => {
+            this.hook.off(`${type}_capture`, cb);
+          }
+        });
+
+        Object.assign(dispatch, {
+          on: cb => {
+            this.hook.on(type, cb);
+          },
+          once: cb => {
+            this.hook.once(type, cb);
+          },
+          off: cb => {
+            this.hook.off(type, cb);
+          },
+          before
+        });
+
+        return dispatch;
+      }
+    }
+  );
+
   callInital(cid) {
-    if (!this.channel) throw "非法调用";
+    if (!this.channel) return;
     const nodes = [];
     const rs = [this];
     while (rs.length) {
@@ -111,24 +146,27 @@ export class Node {
       rs.push(...(cur.results ?? []));
       nodes.push(Node.node2obj(cur));
     }
-    this.channel.postMessage(
-      EVENT_TYPES.patch,
-      [
-        {
-          id: this.id,
-          type: DIFF_TYPES.connect,
-          payload: nodes
-        }
-      ],
-      cid
-    );
+
+    this.post().finally(() => {
+      this.channel.postMessage(
+        EVENT_TYPES.patch,
+        [
+          {
+            id: this.id,
+            type: DIFF_TYPES.connect,
+            payload: nodes
+          }
+        ],
+        cid
+      );
+    });
   }
 
   emit(e) {
     const isUserEvt = !e.detail?._eid;
     const shouldCall = new RegExp(`^${this.id}`).test(e.detail?._eid);
     if (!isUserEvt && !shouldCall) return;
-    const eventName = e.type.replace(/(_capture)?$/, "");
+    const eventName = e.type.replace(/_capture$/, "");
     const captureName = `${eventName}_capture`;
 
     if (!e.cancelBubble) {
@@ -143,17 +181,24 @@ export class Node {
 
     e = e.cancelBubble ? e : this.hook.dispatch(eventName, e.detail);
 
-    if (!e.defaultPrevented && eventName !== "update") {
-      this.emit({ type: "update" });
+    if (!e.defaultPrevented && !["update", "destroy"].includes(eventName)) {
+      if (e.results.length) {
+        e.results.forEach(p => {
+          p?.then?.(() => {
+            this.$scope.forEach(node => {
+              if (node.destroyed) this.$scope.delete(node);
+              else node.emit({ type: "update" });
+            });
+          });
+        });
+        this.$scope.forEach(node => {
+          if (node.destroyed) this.$scope.delete(node);
+          else node.emit({ type: "update" });
+        });
+      }
     }
 
     return e;
-  }
-
-  cancel() {
-    this.fetchFlag = null;
-    this.state = NODE_STATES.resolved;
-    this.results.forEach(node => node.cancel?.());
   }
 
   setResults(results) {
@@ -161,8 +206,20 @@ export class Node {
       if (result instanceof Node) {
         result.parent = this;
         result.index = index;
+        result.$scope.add(this);
+        const children = [...result.children];
+        while (children.length) {
+          const child = children.pop();
+          if (child.children?.length) children.push(...child.children);
+          child?.$scope?.add?.(this);
+        }
       } else {
-        result = { id: `${this.id},${index}`, text: result, _text: true };
+        result = {
+          id: `${this.id},${index}`,
+          index,
+          text: result + "",
+          _text: true
+        };
       }
       return result;
     });
@@ -180,16 +237,15 @@ export class Node {
       this.patchs.push({ id, type, payload });
     }
 
-    if (!this.timer) {
-      this.timer = Promise.resolve().then(() => {
-        if (this.channel) {
-          this.channel.postMessage(EVENT_TYPES.patch, this.patchs);
-        }
-        this.patchs = [];
-        this.timer = null;
-      });
-    }
+    this.post();
   }
+
+  post = debounce(() => {
+    if (this.channel && this.patchs.length) {
+      this.channel.postMessage(EVENT_TYPES.patch, this.patchs);
+    }
+    this.patchs = [];
+  });
 
   bindEventHandlers() {
     Object.keys(this.eventHandlers).forEach(type => {
@@ -203,190 +259,66 @@ export class Node {
     });
   }
 
-  async diff() {
-    const lastResults = [...this.results];
-    const moves = [];
+  diff(force) {
+    if (this.destroyed) return;
+    const curResults = [...this.results];
 
     let result = this.children;
     if (typeof this.tag === "function") {
-      result = this.updateHandler ? this.updateHandler() : await this.fetch();
+      result = this.fetch();
     }
+    if (this.results === result) return;
     this.setResults(result);
-    const curResults = [...this.results];
-
-    const ks = {};
-    curResults.forEach((node, index) => {
-      if (node.key) ks[node.key] = index;
+    const nextResults = [...this.results];
+    const { updateds, moves } = diff(curResults, nextResults);
+    updateds.forEach(update => {
+      if (update.diffrent) {
+        this.callOut(update.id, DIFF_TYPES.update, {
+          props: Node.filterProps(update.props),
+          eventHandlers: Node.filterEventHandlers(update.eventHandlers)
+        });
+      }
+      this.results[update.curNode.index] = update.curNode;
+      if (update.diffrent || force) update.curNode.emit?.({ type: "update" });
     });
-
-    let lastIndex = 0;
-    let curIndex = 0;
-
-    while (lastIndex < lastResults.length && curIndex < curResults.length) {
-      const last = lastResults[lastIndex];
-      let cur = curResults[curIndex];
-
-      if (!last) {
-        lastIndex++;
-        continue;
-      }
-
-      if (!cur) {
-        curIndex++;
-        continue;
-      }
-
-      if (last._text) {
-        if (last.id === cur.id && cur._text) {
-          if (last.text !== cur.text) {
-            this.callOut(last.id, DIFF_TYPES.update, { text: cur.text });
-          }
-          lastResults[lastIndex] = null;
-          curResults[curIndex] = null;
-          curIndex++;
-        }
-        lastIndex++;
-        continue;
-      }
-
-      if (last.index !== lastIndex) {
-        moves.push({ from: lastIndex, to: last.index });
-        lastResults[lastIndex] = null;
-        curResults[last.index] = null;
-        lastIndex++;
-        continue;
-      }
-
-      let index = curIndex;
-      if (last.key in ks) {
-        index = ks[last.key];
-        cur = curResults[index];
-        Reflect.deleteProperty(ks, last.key);
-      }
-
-      if (!sameNode(cur, last)) {
-        lastIndex++;
-        continue;
-      }
-
-      let isDiffrent = false;
-
-      if (!sameObj(cur.props, last.props)) {
-        this.callOut(last.id, DIFF_TYPES.update, {
-          props: Node.filterProps(cur.props)
-        });
-        Object.keys({
-          ...last.props,
-          ...cur.props
-        }).forEach(key => {
-          last.props[key] = cur.props[key];
-        });
-        isDiffrent = true;
-      }
-
-      if (!sameChildren(last, cur)) {
-        last.children.splice(0, last.children.length, ...cur.children);
-        isDiffrent = true;
-      }
-
-      if (!sameObj(last.eventHandlers, cur.eventHandlers)) {
-        this.callOut(last.id, DIFF_TYPES.update, {
-          eventHandlers: Node.filterEventHandlers(cur.eventHandlers)
-        });
-        last.offBindEventHandlers();
-        Object.keys({
-          ...last.eventHandlers,
-          ...cur.eventHandlers
-        }).forEach(key => {
-          last.eventHandlers[key] = cur.eventHandlers[key];
-        });
-        last.bindEventHandlers();
-        isDiffrent = true;
-      }
-
-      if (lastIndex !== index) {
-        moves.push({ from: lastIndex, to: index });
-        last.index = index;
-      }
-
-      this.results[index] = last;
-      curResults[index] = null;
-      lastResults[lastIndex] = null;
-      last.key = cur.key;
-
-      if (isDiffrent) {
-        last.emit?.({
-          type: "update"
-        });
-      }
-    }
-
     curResults.forEach(item => {
       if (item) {
-        this.callOut(item.id, DIFF_TYPES.create, Node.node2obj(item));
-        if (item instanceof Node) {
-          item.channel = this.channel;
-          item.emit({
-            type: "update"
-          });
-        }
+        this.callOut(item.id, DIFF_TYPES.delete);
+        item.emit?.({ type: "destroy" });
       }
     });
-
     moves.forEach(({ from, to }) => {
       this.callOut(`${this.id},${from}`, DIFF_TYPES.move, {
         id: `${this.id},${to}`
       });
     });
-
-    lastResults.forEach(item => {
+    nextResults.forEach(item => {
       if (item) {
-        this.callOut(item.id, DIFF_TYPES.delete);
-        if (item instanceof Node) item.emit({ type: "destroy" });
+        this.callOut(item.id, DIFF_TYPES.create, Node.node2obj(item));
+        if (item instanceof Node) {
+          item.channel = this.channel;
+          item.emit({ type: "update" });
+        }
       }
     });
   }
 
-  async fetch() {
-    if (this.state === NODE_STATES.fetching) this.cancel();
-    this.state = NODE_STATES.fetching;
-    this.callOut(this.id, DIFF_TYPES.update, { state: this.state });
+  fetch() {
+    const caller =
+      this.updateHandler ??
+      this.tag.bind(null, this.props, this.children, this.userHook);
 
-    const flag = {};
-    this.fetchFlag = flag;
-
-    let results;
-    try {
-      results = await this.tag.call(null, this.props, this.children, {
-        on: (type, listener) => {
-          this.hook.on(type, listener);
-        },
-        off: (type, listener) => {
-          this.hook.off(type, listener);
-        },
-        once: (type, listener) => {
-          this.hook.once(type, listener);
-        },
-        dispatch: (type, detail) => {
-          this.emit({ type, detail });
-        }
-      });
-      this.state = NODE_STATES.resolved;
-    } catch (error) {
-      console.error(error);
-      results = [];
-      this.cancel();
-      this.state = NODE_STATES.failed;
+    this.hook.once("__fetch__", caller);
+    let e = this.hook.dispatch("__fetch__");
+    let results = e.result(caller);
+    if (results instanceof Error) {
+      results = this.results ?? [];
     }
-
-    if (flag !== this.fetchFlag) return new Promise(() => {});
 
     if (typeof results === "function" && results[IS_RENDER]) {
       this.updateHandler = results;
       results = results();
     }
-
-    this.callOut(this.id, DIFF_TYPES.update, { state: this.state });
 
     return results;
   }

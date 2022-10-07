@@ -1,31 +1,11 @@
-import { NODE_STATES } from "../common/constants";
-
-export const stateClass = {
-  [NODE_STATES.fetching]: "e-fetching",
-  [NODE_STATES.resolved]: "e-resolved",
-  [NODE_STATES.failed]: "e-failed"
-};
-
-const classReg = new RegExp(`${Object.values(stateClass).join("|")}|$`);
-
-export function createFragment(id) {
-  const comment = document.createComment(id);
+export function createFragment(id, tag) {
+  const comment = document.createComment(`${tag} _eid="${id}" /`);
 
   comment._fragment = true;
   comment.children = [];
   comment.id = id;
+  comment.tag = tag;
   Object.assign(comment, mix);
-  let className = "";
-  Object.defineProperty(comment, "className", {
-    get() {
-      return className;
-    },
-    set(v) {
-      comment.children.forEach(child => {
-        child.className = (child.className ?? "").replace(classReg, v);
-      });
-    }
-  });
   return comment;
 }
 
@@ -33,14 +13,19 @@ const mix = {
   setAttribute(key, value) {
     if (key === "_eid") {
       this.id = value;
-      this.textContent = `/_eid="${value}"`;
-      if (this.startTag) this.startTag.textContent = `/_eid="${value}"`;
+    }
+    if (this.startTag) {
+      this.startTag.textContent = `${this.tag} _eid="${this.id}"`;
+      this.textContent = `/${this.tag}`;
+    } else {
+      this.textContent = `${this.tag} _eid="${this.id}" /`;
     }
   },
 
   append(...children) {
     if (!this.startTag) {
-      this.startTag = document.createComment(this.textContent.slice(1));
+      this.startTag = document.createComment(`${this.tag} _eid="${this.id}"`);
+      this.textContent = `/${this.tag}`;
       this.parentNode.insertBefore(this.startTag, this);
     }
     const frag = document.createDocumentFragment();
@@ -48,10 +33,6 @@ const mix = {
     children.forEach(child => {
       frag.append(child);
       this.children.push(child);
-      child.className = (child.className ?? "").replace(
-        classReg,
-        this.className
-      );
     });
 
     this.parentNode.insertBefore(frag, this);
