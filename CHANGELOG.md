@@ -1,5 +1,12 @@
 
 
+## [0.2.3](https://github.com/Dissme/easy-view/compare/0.2.2...0.2.3) (2022-10-07)
+
+
+### ♻ 重构
+
+* 重构了channel提供了methodChannel；删掉了一些用不到的功能；修改了组件API； ([f64e168](https://github.com/Dissme/easy-view/commit/f64e16832508e14808ec274460b782f18e808b9d))
+
 ## [0.2.2](https://github.com/Dissme/easy-view/compare/0.2.1...0.2.2) (2022-09-24)
 
 
