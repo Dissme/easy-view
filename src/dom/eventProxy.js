@@ -30,16 +30,17 @@ export class EventProxy {
     }
 
     if (this.pool[eventName][id]) return this.pool[eventName][id];
+    this.pool[eventName][id] = this.defaultUnbind;
 
-    let off =
-      plugins[eventName]?.call?.(
-        this.ele,
-        target,
-        this.dispatch.bind(null, eventName, target)
-      ) ?? this.defaultUnbind;
+    const off = plugins[eventName]?.call?.(
+      this.ele,
+      target,
+      this.dispatch.bind(null, eventName, target)
+    );
 
-    this.pool[eventName][id] = off;
-    return off;
+    if (off) this.pool[eventName][id] = off;
+
+    return this.pool[eventName][id];
   }
 
   move(curId, nextId) {

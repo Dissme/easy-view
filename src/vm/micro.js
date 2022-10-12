@@ -9,13 +9,15 @@ export class Micro extends Node {
 
   diff() {
     if (this.lastPort === this.props.port) return;
+    this.callOut(this.id, DIFF_TYPES.delete);
+    this.callOut(this.id, DIFF_TYPES.create);
     this.lastPort = this.props.port;
     this.microChannel?.destroy?.();
     this.inited = false;
     this.microChannel = new Channel();
     this.microChannel.connect(this.props.port);
     this.microChannel.register(EVENT_TYPES.patch, this.patchHandler);
-    this.microChannel.register(EVENT_TYPES.destroy, () => this.destroy());
+    this.microChannel.register(EVENT_TYPES.destroy, this.destroy);
   }
 
   patchHandler = ({ body: patchs }) => {
@@ -57,12 +59,12 @@ export class Micro extends Node {
     return super.emit(e);
   }
 
-  destroy() {
+  destroy = () => {
     super.destroy();
     this.microChannel?.destroy?.();
     this.microChannel = null;
     this.lastPort = null;
-  }
+  };
 }
 
 export function MicroComponent() {}

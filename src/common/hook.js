@@ -5,6 +5,13 @@ export class Hook {
 
   listeners = [];
 
+  get boundedEvents() {
+    return Object.keys({
+      ...this.pool,
+      ...this.oncePool
+    }).filter(name => name !== "*");
+  }
+
   on(type, listener) {
     if (typeof listener !== "function") return;
     (this.pool[type] || (this.pool[type] = new Set())).add(listener);

@@ -27,24 +27,13 @@ export class Node {
     );
   }
 
-  static filterEventHandlers(eventHandlers) {
-    if (!eventHandlers) return;
-    return [
-      ...new Set(
-        Object.keys(eventHandlers).map(evtName =>
-          evtName.replace(/_capture$/, "")
-        )
-      )
-    ];
-  }
-
   static node2obj(node) {
     if (node instanceof Node) {
       node = {
         id: node.id,
         tag: typeof node.tag === "function" ? node.tag.name : node.tag,
         props: this.filterProps(node.props),
-        eventHandlers: this.filterEventHandlers(node.eventHandlers),
+        eventHandlers: node.boundedEvents,
         _fragment: typeof node.tag === "function"
       };
     } else {
@@ -78,6 +67,18 @@ export class Node {
     return `${this.parent?.id ?? ""},${this.index}`;
   }
 
+  get boundedEvents() {
+    return [
+      ...new Set(
+        this.hook.boundedEvents
+          .map(evtName => evtName.replace(/_capture$/, ""))
+          .filter(
+            evtName => !["update", "destroy", "__fetch__"].includes(evtName)
+          )
+      )
+    ];
+  }
+
   constructor(initails) {
     Object.assign(this, initails);
     this.hook.on("update", this.update);
@@ -105,29 +106,43 @@ export class Node {
       get: (target, type) => {
         type = type.replace(/_capture$/, "");
 
+        const updateEvents = () => {
+          this.callOut(this.id, DIFF_TYPES.update, {
+            eventHandlers: this.boundedEvents
+          });
+        };
+
         const dispatch = detail => {
           this.emit({ type, detail });
         };
-        const before = cb => this.hook.on(`${type}_capture`, cb);
+        const before = cb => {
+          this.hook.on(`${type}_capture`, cb);
+          updateEvents();
+        };
 
         Object.assign(before, {
           once: cb => {
             this.hook.once(`${type}_capture`, cb);
+            updateEvents();
           },
           off: cb => {
             this.hook.off(`${type}_capture`, cb);
+            updateEvents();
           }
         });
 
         Object.assign(dispatch, {
           on: cb => {
             this.hook.on(type, cb);
+            updateEvents();
           },
           once: cb => {
             this.hook.once(type, cb);
+            updateEvents();
           },
           off: cb => {
             this.hook.off(type, cb);
+            updateEvents();
           },
           before
         });
@@ -169,7 +184,7 @@ export class Node {
     const eventName = e.type.replace(/_capture$/, "");
     const captureName = `${eventName}_capture`;
 
-    if (!e.cancelBubble) {
+    if (e.detail?.cancelBubble ? this.id === e.detail?._eid : !e.cancelBubble) {
       e = this.hook.dispatch(captureName, e.detail);
     }
 
@@ -179,7 +194,9 @@ export class Node {
       });
     }
 
-    e = e.cancelBubble ? e : this.hook.dispatch(eventName, e.detail);
+    if (e.detail?.cancelBubble ? this.id === e.detail?._eid : !e.cancelBubble) {
+      e = this.hook.dispatch(eventName, e.detail);
+    }
 
     if (!e.defaultPrevented && !["update", "destroy"].includes(eventName)) {
       if (e.results.length) {
@@ -275,7 +292,7 @@ export class Node {
       if (update.diffrent) {
         this.callOut(update.id, DIFF_TYPES.update, {
           props: Node.filterProps(update.props),
-          eventHandlers: Node.filterEventHandlers(update.eventHandlers)
+          eventHandlers: update.eventHandlers
         });
       }
       this.results[update.curNode.index] = update.curNode;
@@ -296,6 +313,7 @@ export class Node {
       if (item) {
         this.callOut(item.id, DIFF_TYPES.create, Node.node2obj(item));
         if (item instanceof Node) {
+          phase.firstPaint = true;
           item.channel = this.channel;
           item.emit({ type: "update" });
         }

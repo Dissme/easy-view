@@ -1,4 +1,5 @@
 import { sameChildren, sameNode, sameObj } from "./helpers";
+import { Node } from "./node";
 
 export function diff(curResults = [], nextResults) {
   const updateds = [];
@@ -36,24 +37,24 @@ export function diff(curResults = [], nextResults) {
       update.props = curNode.props;
     }
 
-    if (!sameObj(nextNode.eventHandlers, curNode.eventHandlers)) {
-      let diffrent = false;
+    if (curNode instanceof Node) {
+      const curEvts = curNode.boundedEvents ?? [];
       curNode.offBindEventHandlers();
       Object.keys({
         ...curNode.eventHandlers,
         ...nextNode.eventHandlers
       }).forEach(eventName => {
-        if (
-          !curNode.eventHandlers[eventName] ||
-          !nextNode.eventHandlers[eventName]
-        ) {
-          diffrent = true;
-        }
         curNode.eventHandlers[eventName] = nextNode.eventHandlers[eventName];
       });
-      update.diffrent = update.diffrent || diffrent;
-      update.eventHandlers = curNode.eventHandlers;
       curNode.bindEventHandlers();
+      const nextEvts = curNode.boundedEvents ?? [];
+      if (
+        curEvts.length !== nextEvts.length ||
+        curEvts.some(evt => !nextEvts.includes(evt))
+      ) {
+        update.diffrent = true;
+        update.eventHandlers = nextEvts;
+      }
     }
 
     if (!sameChildren(nextNode.children, curNode.children)) {

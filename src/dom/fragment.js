@@ -22,6 +22,10 @@ const mix = {
     }
   },
 
+  getAttribute(key) {
+    if (key === "_eid") return this.id;
+  },
+
   append(...children) {
     if (!this.startTag) {
       this.startTag = document.createComment(`${this.tag} _eid="${this.id}"`);
@@ -32,14 +36,16 @@ const mix = {
 
     children.forEach(child => {
       frag.append(child);
-      this.children.push(child);
+      this.children.push(child.$ele ?? child);
     });
 
     this.parentNode.insertBefore(frag, this);
   },
 
   remove() {
-    this.children.forEach(child => child.remove());
+    this.children.forEach(child => {
+      child.remove();
+    });
     this.children = [];
     this.startTag?.remove();
     this.constructor.prototype.remove.call(this);
