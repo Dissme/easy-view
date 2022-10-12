@@ -1,5 +1,12 @@
 
 
+## [0.2.4](https://github.com/Dissme/easy-view/compare/0.2.3...0.2.4) (2022-10-12)
+
+
+### 🐛 Bug 修复
+
+* **dom:** 修复一个patch过程中会删除失败的bug ([64be439](https://github.com/Dissme/easy-view/commit/64be4394d75009d3ad453bb18342f623bc455ef4))
+
 ## [0.2.3](https://github.com/Dissme/easy-view/compare/0.2.2...0.2.3) (2022-10-07)
 
 
