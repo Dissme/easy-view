@@ -200,6 +200,7 @@ export class Node {
 
     if (!e.defaultPrevented && !["update", "destroy"].includes(eventName)) {
       if (e.results.length) {
+        this.update();
         e.results.forEach(p => {
           p?.then?.(() => {
             this.$scope.forEach(node => {

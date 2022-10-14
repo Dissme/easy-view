@@ -3,8 +3,6 @@ export class Hook {
   pool = {};
   oncePool = {};
 
-  listeners = [];
-
   get boundedEvents() {
     return Object.keys({
       ...this.pool,
@@ -31,17 +29,16 @@ export class Hook {
     (this.oncePool[type] || (this.oncePool[type] = new Set())).add(listener);
   }
 
-  #bind(type) {
-    this.listeners.forEach(listener => {
+  #bind(type, listeners) {
+    listeners.forEach(listener => {
       this.target.addEventListener(type, listener);
     });
   }
 
-  #remove(type) {
-    this.listeners.forEach(listener => {
+  #remove(type, listeners) {
+    listeners.forEach(listener => {
       this.target.removeEventListener(type, listener);
     });
-    this.listeners = [];
   }
 
   dispatch(type, detail = null) {
@@ -59,7 +56,7 @@ export class Hook {
       results.push(error);
       resultsMap.set(currentFn, error);
     };
-    this.listeners = [
+    const listeners = [
       ...(this.oncePool["*"] ?? []),
       ...(this.oncePool[type] ?? []),
       ...(this.pool["*"] ?? []),
@@ -72,12 +69,12 @@ export class Hook {
     });
     this.oncePool["*"] = new Set();
     this.oncePool[type] = new Set();
-    this.#bind(type);
+    this.#bind(type, listeners);
     this.target.dispatchEvent(e);
     e.result = fn => resultsMap.get(fn);
     e.results = results;
     self.onerror = lastError;
-    this.#remove(type);
+    this.#remove(type, listeners);
     return e;
   }
 }
