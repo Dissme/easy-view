@@ -1,5 +1,12 @@
 
 
+## [0.2.5](https://github.com/Dissme/easy-view/compare/0.2.4...0.2.5) (2022-10-14)
+
+
+### 🐛 Bug 修复
+
+* **node:** 修复递归触发事件时不解绑的bug，事件触发后默认调用一次update ([aef9ca4](https://github.com/Dissme/easy-view/commit/aef9ca4a17a89f73164515d1d25b3ae0c5af0136))
+
 ## [0.2.4](https://github.com/Dissme/easy-view/compare/0.2.3...0.2.4) (2022-10-12)
 
 
