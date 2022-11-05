@@ -1,128 +1,73 @@
-import { EVENT_TYPES } from "./constants";
-import { Hook } from "./hook";
-import { WriteStream, ReadStream } from "./stream";
+import { Connector } from "./connector";
+import { CONNECTOR_TYPES } from "./constants";
 
 export class Channel {
-  #writeStream;
-  #readStream;
-  #handlers = {};
-  destroyed = true;
+  static type = CONNECTOR_TYPES.channel;
+
+  #ctx;
+  handlers = {};
 
   connect(port) {
-    if (!this.destroyed) this.destroy();
-    this.#readStream = ReadStream.getInstance(port);
-    this.#writeStream = WriteStream.getInstance(port);
-    this.destroyed = false;
+    this.disconnect();
+    this.#ctx = Connector.getInstance(port);
+    this.#ctx.register(this.constructor.type, this.#callback);
   }
 
-  register(type, handler) {
-    this.#handlers[type] = e => handler(e?.detail);
-    this.#readStream.register(type, this.#handlers[type]);
+  #callback = ({ detail: { method, params } }) => {
+    const fn = this.handlers[method];
+    if (!fn) throw new ReferenceError(`未注册的函数 ${method}`);
+    return fn(params);
+  };
+
+  postMessage(method, params) {
+    if (!this.#ctx) return;
+    this.#ctx.postMessage(this.constructor.type, { method, params });
   }
 
-  postMessage(type, body) {
-    const prev = this.#writeStream.version;
-    this.#writeStream.postMessage({
-      type,
-      body
-    });
-    return prev;
+  sendMessage(method, params) {
+    if (!this.#ctx) return;
+    return this.#ctx.sendMessage(this.constructor.type, { method, params });
   }
 
-  destroy() {
-    if (this.destroyed) return;
-    this.postMessage(EVENT_TYPES.destroy);
-    Object.keys(this.#handlers, type => {
-      this.#readStream.unregister(type, this.#handlers[type]);
-    });
-    this.#handlers = {};
-    this.#writeStream = null;
-    this.#readStream = null;
+  register(method, handler) {
+    this.handlers[method] = handler;
+  }
+
+  disconnect() {
+    if (!this.#ctx) return;
+    this.#ctx.unregister(this.constructor.type, this.#callback);
+    this.#ctx = null;
   }
 }
 
 export class MethodChannel extends Channel {
-  #handlers = {};
-  #resolvers = new Hook();
+  static type = CONNECTOR_TYPES.method;
 
-  timeout = 3000;
-
-  connect(port) {
-    super.connect(port);
-    super.register(EVENT_TYPES.send, this.#onSend);
-    super.register(EVENT_TYPES.receipt, this.#onReceipt);
-    super.register(EVENT_TYPES.userCall, this.#onUserCall);
-  }
-
-  #onSend = async ({ body: { methodName, params }, prev }) => {
-    const result = await this.#handlers[methodName]?.call?.(null, params);
-    super.postMessage(EVENT_TYPES.receipt, { result, prev });
-  };
-
-  #onReceipt = ({ body: { result, prev } }) => {
-    this.#resolvers.dispatch(prev, result);
-  };
-
-  #onUserCall = ({ body: { methodName, params } }) => {
-    this.#handlers[methodName]?.call?.(null, params);
-  };
-
-  register(methodName, method) {
-    this.#handlers[methodName] = method;
-  }
-
-  unregister(methodName) {
-    Reflect.deleteProperty(this.#handlers, methodName);
-  }
-
-  postMessage(methodName, params) {
-    super.postMessage(EVENT_TYPES.userCall, { methodName, params });
-  }
-
-  sendMessage(methodName, params) {
-    const prev = super.postMessage(EVENT_TYPES.send, { methodName, params });
-    return new Promise((resolve, reject) => {
-      this.#resolvers.once(prev, ({ detail }) => resolve(detail));
-      setTimeout(() => {
-        this.#resolvers.off(prev);
-        reject("timeout");
-      }, this.timeout);
-    });
+  unregister(method) {
+    Reflect.deleteProperty(this.handlers, method);
   }
 }
 
 export default class GroupChannel {
-  #channels = [];
+  channels = [];
+  handlers = {};
 
-  connect(port) {
-    const channel = new Channel();
-    channel.connect(port);
-    return this.#channels.push(channel) - 1;
+  add(channel) {
+    const cid = this.channels.length;
+    this.channels[cid] = channel;
+    channel.handlers = this.handlers;
+    return cid;
   }
 
-  disconnect(cid) {
-    this.#channels[cid]?.destroy?.();
-    this.#channels[cid] = null;
+  register(method, handler) {
+    this.handlers[method] = handler;
   }
 
-  postMessage(type, body, ...cids) {
-    let channels = this.#channels;
-    if (cids.length) {
-      channels = channels.filter(
-        (channel, cid) => channel && cids.includes(cid)
-      );
-    }
-    channels.forEach(channel => {
-      channel.postMessage(type, body);
-    });
+  postMessage(method, params) {
+    this.channels.forEach(channel => channel.postMessage(method, params));
   }
 
-  register(type, handler, cid) {
-    this.#channels[cid]?.register(type, handler);
-  }
-
-  destroy() {
-    this.#channels.forEach(channel => channel?.destroy?.());
-    this.#channels = [];
+  postMessage2C(method, params, cid) {
+    this.channels[cid].postMessage(method, params);
   }
 }

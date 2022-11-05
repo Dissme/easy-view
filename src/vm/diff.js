@@ -1,4 +1,5 @@
 import { sameChildren, sameNode, sameObj } from "./helpers";
+import { MicroComponent } from "./MicroComponents";
 import { Node } from "./node";
 
 export function diff(curResults = [], nextResults) {
@@ -20,7 +21,12 @@ export function diff(curResults = [], nextResults) {
   };
 
   function diffNode(nextNode, curNode) {
-    if (!sameNode(nextNode, curNode)) return false;
+    if (
+      !sameNode(nextNode, curNode) ||
+      (nextNode.tag === MicroComponent &&
+        nextNode.props.url !== curNode.props.url)
+    )
+      return false;
     const update = { id: curNode.id, curNode, diffrent: false };
 
     if (nextNode.id !== curNode.id) {

@@ -1,8 +1,18 @@
-import { Channel, MethodChannel } from "../common/channel";
+import { Channel } from "../common/channel";
 import { render } from "../common/render";
-import { DIFF_TYPES, EVENT_TYPES } from "../common/constants";
+import { CONNECTOR_TYPES, DIFF_TYPES, EVENT_TYPES } from "../common/constants";
 import { EventProxy } from "./eventProxy";
 import { createFragment } from "./fragment";
+import { Connector } from "../common/connector";
+import "./microComponent";
+
+let microLoader = props => {
+  return new Worker(props.url);
+};
+
+export function onLoadMicro(fn) {
+  microLoader = fn;
+}
 
 function filterProps(props) {
   if (!props) return;
@@ -28,12 +38,10 @@ function createElementNs(tag, parent) {
 }
 
 function applyPatchs(patchs, container, nodeCache, eventProxy) {
-  const cache = {};
-
   const patchHandlers = {
     [DIFF_TYPES.create]({
       id,
-      payload: { _text, text, _fragment, tag, props, eventHandlers }
+      payload: { _text, text, _fragment, tag, props, eventHandlers, _micro }
     }) {
       filterProps(props);
       let ele;
@@ -41,6 +49,11 @@ function applyPatchs(patchs, container, nodeCache, eventProxy) {
 
       if (_text) {
         ele = document.createTextNode(text);
+      } else if (_micro) {
+        ele = document.createElement("micro-component");
+        const port = microLoader(props);
+        if (!port) return;
+        ele.shadowRoot.destroyCallback = mountFromPort(port, ele.shadowRoot);
       } else if (_fragment) {
         ele = createFragment(id, tag);
       } else {
@@ -51,7 +64,7 @@ function applyPatchs(patchs, container, nodeCache, eventProxy) {
       }
       insert(parentId, id, ele);
 
-      cache[id] = ele;
+      nodeCache[id] = ele;
       eventHandlers?.forEach?.(evtName => {
         eventProxy.on(evtName, id, ele);
       });
@@ -111,39 +124,12 @@ function applyPatchs(patchs, container, nodeCache, eventProxy) {
         Reflect.deleteProperty(nodeCache, key);
         eventProxy.move(key, t);
       });
-    },
-    [DIFF_TYPES.connect]({ payload: nodes }) {
-      nodes.forEach(
-        ({ id, _text, text, _fragment, tag, props, eventHandlers }) => {
-          const [, parentId] = id.match(/(.*)?,([^,]+)$/) ?? [];
-          filterProps(props);
-          let ele;
-          if (_text) {
-            ele = document.createTextNode(text);
-          } else if (_fragment) {
-            ele = createFragment(id, tag);
-          } else {
-            ele = createElementNs(tag, nodeCache[parentId]);
-            Object.keys(props).forEach(key => {
-              ele.setAttribute(key, props[key]);
-            });
-          }
-
-          insert(parentId, id, ele);
-          nodeCache[id] = ele;
-          eventHandlers?.forEach?.(evtName => {
-            eventProxy.on(evtName, id, ele);
-          });
-        }
-      );
     }
   };
 
   patchs.forEach(patch => {
     patchHandlers[patch.type]?.(patch);
   });
-
-  Object.assign(nodeCache, cache);
 
   function moveFragment(cur) {
     const frag = document.createDocumentFragment();
@@ -183,21 +169,34 @@ function applyPatchs(patchs, container, nodeCache, eventProxy) {
 
 export function mountFromPort(port, container = document.body) {
   let inited = false;
-  const nodeCache = {};
+  let nodeCache = {};
+  const connector = Connector.getInstance(port);
   const channel = new Channel();
   const eventProxy = new EventProxy(container, body => {
     channel.postMessage(EVENT_TYPES.call, body);
   });
-  channel.connect(port);
-  channel.register(EVENT_TYPES.patch, ({ body: patchs }) => {
-    if (patchs[0].type === DIFF_TYPES.connect) inited = true;
-    if (inited) applyPatchs(patchs, container, nodeCache, eventProxy);
+
+  channel.register(EVENT_TYPES.initial, patchs => {
+    if (inited) return;
+    inited = true;
+    applyPatchs(patchs, container, nodeCache, eventProxy);
   });
-  channel.register(EVENT_TYPES.destroy, () => destroy);
+
+  channel.register(EVENT_TYPES.patch, patchs => {
+    if (!inited) return;
+    applyPatchs(patchs, container, nodeCache, eventProxy);
+  });
+
+  channel.connect(port);
+  connector.postMessage(CONNECTOR_TYPES.connector, EVENT_TYPES.connect);
+
   function destroy() {
-    channel.destroy();
+    inited = false;
+    connector.postMessage(CONNECTOR_TYPES.connector, EVENT_TYPES.destroy);
+    channel.disconnect();
     eventProxy.destroy();
     container.replaceChildren();
+    nodeCache = null;
   }
   return destroy;
 }
@@ -209,4 +208,3 @@ export function mount(node, container) {
 }
 
 export { use } from "./eventProxy";
-export { render, MethodChannel };

@@ -1,24 +1,29 @@
-import GroupChannel from "./channel";
-import { EVENT_TYPES } from "./constants";
+import GroupChannel, { Channel } from "./channel";
+import { Connector } from "./connector";
+import { CONNECTOR_TYPES, EVENT_TYPES } from "./constants";
 
 export function render(node) {
-  const channel = new GroupChannel();
+  const groupChannel = new GroupChannel();
+  groupChannel.register(EVENT_TYPES.call, e => node.emit(e));
 
-  node.channel = channel;
+  node.channel = groupChannel;
   node.diff();
 
   return function listen(port) {
-    const cid = channel.connect(port);
-    channel.register(EVENT_TYPES.connect, () => node.callInital(cid), cid);
-    channel.register(
-      EVENT_TYPES.call,
-      ({ body }) => {
-        body.cid = cid;
-        node.emit(body);
-      },
-      cid
-    );
-    channel.register(EVENT_TYPES.destroy, () => channel.disconnect(cid));
-    return cid;
+    const connector = Connector.getInstance(port);
+    const channel = new Channel();
+
+    connector.register(CONNECTOR_TYPES.connector, async ({ detail }) => {
+      if (detail === EVENT_TYPES.connect) {
+        channel.connect(port);
+        await node.post();
+        channel.postMessage(EVENT_TYPES.initial, node.getNodes());
+      }
+      if (detail === EVENT_TYPES.destroy) {
+        channel.disconnect();
+      }
+    });
+
+    return groupChannel.add(channel);
   };
 }

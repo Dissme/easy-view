@@ -2,8 +2,15 @@ const plugins = {};
 
 export function use(options) {
   Object.assign(plugins, options);
+  Object.keys(options).forEach(type => {
+    EventProxy.inistances.forEach(instance => {
+      plugins[type].init?.(instance.ele);
+    });
+  });
 }
 export class EventProxy {
+  static inistances = new Set();
+  /**@type {HTMLElement} */
   ele;
   callOut;
   pool = {};
@@ -11,6 +18,10 @@ export class EventProxy {
   constructor(ele, callOut) {
     this.ele = ele;
     this.callOut = callOut;
+    EventProxy.inistances.add(this);
+    Object.keys(plugins).forEach(type => {
+      plugins[type].init?.(this.ele);
+    });
   }
 
   defaultUnbind() {}
@@ -26,7 +37,7 @@ export class EventProxy {
   on(eventName, id, target) {
     if (!this.pool[eventName]) {
       this.pool[eventName] = {};
-      this.ele.addEventListener(eventName, this.handler);
+      this.ele.addEventListener(eventName, this.handler, { passive: true });
     }
 
     if (this.pool[eventName][id]) return this.pool[eventName][id];
@@ -111,6 +122,7 @@ export class EventProxy {
     });
     this.pool = null;
     this.ele = null;
+    EventProxy.inistances.delete(this);
   }
 }
 

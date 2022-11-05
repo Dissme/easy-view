@@ -58,5 +58,12 @@ const mix = {
     if (index === -1) index = this.children.length;
     this.children.splice(index, 0, node.$ele ?? node);
     this.parentNode.insertBefore(node, child.startTag ?? child);
+  },
+
+  replaceChildren() {
+    this.children.forEach(child => {
+      child.remove();
+    });
+    this.children = [];
   }
 };

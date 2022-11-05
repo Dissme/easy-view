@@ -65,7 +65,7 @@ export function sameNode(nodeA, nodeB) {
   if (!nodeA || !nodeB) return false;
   return (
     nodeA + "" === nodeB + "" &&
-    nodeA.tag + "" === nodeB.tag + "" &&
+    nodeA.tag === nodeB.tag &&
     nodeA.key === nodeB.key &&
     nodeA.text === nodeB.text
   );

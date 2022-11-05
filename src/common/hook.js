@@ -7,7 +7,7 @@ export class Hook {
     return Object.keys({
       ...this.pool,
       ...this.oncePool
-    }).filter(name => name !== "*");
+    });
   }
 
   on(type, listener) {
@@ -16,12 +16,15 @@ export class Hook {
   }
 
   off(type, listener) {
-    if (listener === undefined) {
-      this.pool[type]?.clear?.();
-    } else {
+    if (listener) {
       this.pool[type]?.delete?.(listener);
       this.oncePool[type]?.delete?.(listener);
+    } else {
+      this.pool[type]?.clear?.();
+      this.oncePool[type]?.clear();
     }
+    if (!this.pool[type]?.size) Reflect.deleteProperty(this.pool, type);
+    if (!this.oncePool[type]?.size) Reflect.deleteProperty(this.pool, type);
   }
 
   once(type, listener) {
@@ -57,9 +60,7 @@ export class Hook {
       resultsMap.set(currentFn, error);
     };
     const listeners = [
-      ...(this.oncePool["*"] ?? []),
       ...(this.oncePool[type] ?? []),
-      ...(this.pool["*"] ?? []),
       ...(this.pool[type] ?? [])
     ].map(fn => e => {
       currentFn = fn;
@@ -67,8 +68,7 @@ export class Hook {
       results.push(ret);
       resultsMap.set(currentFn, ret);
     });
-    this.oncePool["*"] = new Set();
-    this.oncePool[type] = new Set();
+    Reflect.deleteProperty(this.oncePool, type);
     this.#bind(type, listeners);
     this.target.dispatchEvent(e);
     e.result = fn => resultsMap.get(fn);

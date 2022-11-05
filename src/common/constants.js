@@ -1,17 +1,28 @@
+export const CONNECTOR_TYPES = {
+  connector: 0,
+  channel: 1 << 4,
+  method: 2 << 4,
+  maskCode: 0xf0
+};
+
+export const METHOD_TYPES = {
+  post: 0,
+  send: 1,
+  receipt: 2,
+  maskCode: 0xf
+};
+
 export const EVENT_TYPES = {
-  connect: 1, // 连接
-  patch: 2, // 更新dom
-  send: 3, // 需要回执的消息
-  receipt: 4, // 消息回执
-  call: 5, // 调用函数
-  userCall: 6, // 用户调用函数
-  destroy: 7 // 用户调用函数
+  connect: 0,
+  destroy: 1,
+  call: 2,
+  initial: 3,
+  patch: 4
 };
 
 export const DIFF_TYPES = {
   create: 1,
   update: 2,
   delete: 3,
-  move: 4,
-  connect: 5
+  move: 4
 };

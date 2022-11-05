@@ -1,5 +1,5 @@
 import { flatNodes, splitProps } from "./helpers";
-import { Micro, MicroComponent } from "./micro";
+import { MicroComponent } from "./MicroComponents";
 import { Node } from "./node";
 
 export { Fragment, defineRender } from "./node";
@@ -10,16 +10,17 @@ export function jsxs(tag, options, key) {
     throw new TypeError(`意外的tag类型<${tag}>`);
   }
 
-  const Constructor = tag === MicroComponent ? Micro : Node;
-
   let { children, eventHandlers, props } = splitProps(options);
 
   children = flatNodes(children);
 
-  return new Constructor({ tag, props, children, eventHandlers, key });
+  return new Node({ tag, props, children, eventHandlers, key });
 }
 
 export function jsx(tag, options, key) {
   options.children = [options.children];
   return jsxs(tag, options, key);
 }
+
+export { render } from "../common/render";
+export { MethodChannel } from "../common/channel";

@@ -3,6 +3,7 @@ import { debounce, flatNodes } from "./helpers";
 import { Hook } from "../common/hook";
 import phase from "./phase";
 import { diff } from "./diff";
+import { MicroComponent } from "./MicroComponents";
 
 export const IS_RENDER = Symbol("IS_RENDER");
 export function defineRender(fn) {
@@ -34,7 +35,8 @@ export class Node {
         tag: typeof node.tag === "function" ? node.tag.name : node.tag,
         props: this.filterProps(node.props),
         eventHandlers: node.boundedEvents,
-        _fragment: typeof node.tag === "function"
+        _fragment: typeof node.tag === "function",
+        _micro: node.tag === MicroComponent
       };
     } else {
       node = {
@@ -82,7 +84,7 @@ export class Node {
   constructor(initails) {
     Object.assign(this, initails);
     this.hook.on("update", this.update);
-    this.hook.on("destroy", this.destroy);
+    this.hook.on("destroy", () => this.destroy());
     this.bindEventHandlers();
   }
 
@@ -90,7 +92,7 @@ export class Node {
     phase.add(this, force);
   };
 
-  destroy = () => {
+  destroy() {
     phase.delete(this);
     this.destroyed = true;
     this.parent = null;
@@ -98,7 +100,7 @@ export class Node {
     this.channel = null;
     this.offBindEventHandlers();
     this.results.forEach(node => node.emit?.({ type: "destroy" }));
-  };
+  }
 
   userHook = new Proxy(
     {},
@@ -152,29 +154,19 @@ export class Node {
     }
   );
 
-  callInital(cid) {
-    if (!this.channel) return;
-    const nodes = [];
+  getNodes() {
+    const patchs = [];
     const rs = [this];
     while (rs.length) {
       const cur = rs.shift();
       rs.push(...(cur.results ?? []));
-      nodes.push(Node.node2obj(cur));
+      patchs.push({
+        id: cur.id,
+        type: DIFF_TYPES.create,
+        payload: Node.node2obj(cur)
+      });
     }
-
-    this.post().finally(() => {
-      this.channel.postMessage(
-        EVENT_TYPES.patch,
-        [
-          {
-            id: this.id,
-            type: DIFF_TYPES.connect,
-            payload: nodes
-          }
-        ],
-        cid
-      );
-    });
+    return patchs;
   }
 
   emit(e) {
@@ -198,22 +190,24 @@ export class Node {
       e = this.hook.dispatch(eventName, e.detail);
     }
 
-    if (!e.defaultPrevented && !["update", "destroy"].includes(eventName)) {
-      if (e.results.length) {
-        this.update();
-        e.results.forEach(p => {
-          p?.then?.(() => {
-            this.$scope.forEach(node => {
-              if (node.destroyed) this.$scope.delete(node);
-              else node.emit({ type: "update" });
-            });
+    if (
+      !e.defaultPrevented &&
+      !["update", "destroy"].includes(eventName) &&
+      e.results?.length
+    ) {
+      this.update();
+      e.results.forEach(p => {
+        p?.then?.(() => {
+          this.$scope.forEach(node => {
+            if (node.destroyed) this.$scope.delete(node);
+            else node.emit({ type: "update" });
           });
         });
-        this.$scope.forEach(node => {
-          if (node.destroyed) this.$scope.delete(node);
-          else node.emit({ type: "update" });
-        });
-      }
+      });
+      this.$scope.forEach(node => {
+        if (node.destroyed) this.$scope.delete(node);
+        else node.emit({ type: "update" });
+      });
     }
 
     return e;
