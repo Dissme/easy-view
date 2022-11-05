@@ -1,5 +1,12 @@
 
 
+## [0.2.6](https://github.com/Dissme/easy-view/compare/0.2.5...0.2.6) (2022-11-05)
+
+
+### ♻ 重构
+
+* 重构了channel部分，分层更清晰；重构了microComponent，去掉了proxy的逻辑，用shadowdom直接挂载远程组件。 ([f205be5](https://github.com/Dissme/easy-view/commit/f205be52aeb1ac6c5f25e9b465d9b10836198b4c))
+
 ## [0.2.5](https://github.com/Dissme/easy-view/compare/0.2.4...0.2.5) (2022-10-14)
 
 
