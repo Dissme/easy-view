@@ -51,9 +51,13 @@ function applyPatchs(patchs, container, nodeCache, eventProxy) {
         ele = document.createTextNode(text);
       } else if (_micro) {
         ele = document.createElement("micro-component");
-        const port = microLoader(props);
-        if (!port) return;
-        ele.shadowRoot.destroyCallback = mountFromPort(port, ele.shadowRoot);
+        Object.keys(props).forEach(key => {
+          ele.setAttribute(key, props[key]);
+        });
+        const port = microLoader(ele.shadowRoot, props);
+        if (port) {
+          ele.shadowRoot.destroyCallback = mountFromPort(port, ele.shadowRoot);
+        }
       } else if (_fragment) {
         ele = createFragment(id, tag);
       } else {
