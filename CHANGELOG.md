@@ -1,5 +1,12 @@
 
 
+## [0.2.7](https://github.com/Dissme/easy-view/compare/0.2.6...0.2.7) (2022-11-05)
+
+
+### 🐛 Bug 修复
+
+* **dom:** 修复自定义组件没设属性的bug ([c1db9f8](https://github.com/Dissme/easy-view/commit/c1db9f8ff0ea814163d714f60d980ae6ce48c6f3))
+
 ## [0.2.6](https://github.com/Dissme/easy-view/compare/0.2.5...0.2.6) (2022-11-05)
 
 
