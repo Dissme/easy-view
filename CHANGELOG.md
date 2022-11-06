@@ -1,5 +1,12 @@
 
 
+## [0.2.8](https://github.com/Dissme/easy-view/compare/0.2.7...0.2.8) (2022-11-06)
+
+
+### 🐛 Bug 修复
+
+* **microcomponent:** 修复远程挂载的节点断开逻辑不执行的问题 ([881b197](https://github.com/Dissme/easy-view/commit/881b197e69ba363102108054dbb51551cfe708b6))
+
 ## [0.2.7](https://github.com/Dissme/easy-view/compare/0.2.6...0.2.7) (2022-11-05)
 
 
