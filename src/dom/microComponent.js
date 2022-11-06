@@ -13,7 +13,7 @@ customElements.define(
     }
 
     disconnectedCallback() {
-      this.destroyCallback?.();
+      if (!this.parentNode) this.destroyCallback?.();
     }
   }
 );

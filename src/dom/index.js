@@ -54,9 +54,9 @@ function applyPatchs(patchs, container, nodeCache, eventProxy) {
         Object.keys(props).forEach(key => {
           ele.setAttribute(key, props[key]);
         });
-        const port = microLoader(ele.shadowRoot, props);
+        const port = microLoader(props);
         if (port) {
-          ele.shadowRoot.destroyCallback = mountFromPort(port, ele.shadowRoot);
+          ele.destroyCallback = mountFromPort(port, ele.shadowRoot);
         }
       } else if (_fragment) {
         ele = createFragment(id, tag);
