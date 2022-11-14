@@ -6,13 +6,9 @@ function include(a, b) {
 }
 
 export class Connector {
-  /**@type {WeakMap<MessagePort, Connector>} */
-  static map = new WeakMap();
   static getInstance(port) {
-    if (!this.map.has(port)) {
-      this.map.set(port, new this(port));
-    }
-    return this.map.get(port);
+    if (!port.ctx) port.ctx = new this(port);
+    return port.ctx;
   }
 
   /** @type {MessagePort} */
@@ -70,7 +66,7 @@ export class Connector {
       if (!results.length) continue;
       if (include(type, METHOD_TYPES.send)) {
         const result = results.find(r => !(r instanceof Error));
-        if (result) this.receiptMessage(result);
+        this.receiptMessage(result);
       }
     }
   }

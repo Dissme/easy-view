@@ -117,7 +117,8 @@ export class EventProxy {
 
   destroy() {
     Object.keys(this.pool).forEach(key => {
-      Object.keys(this.pool[key]).forEach(off => off());
+      const pool = this.pool[key];
+      Object.keys(pool).forEach(id => pool[id]());
       this.ele.removeEventListener(key, this.handler);
     });
     this.pool = null;

@@ -28,7 +28,7 @@ function generateNodes(nodes) {
     if (typeof node === "function" && node[IS_RENDER])
       return generateNodes([node()]);
     if (Array.isArray(node)) return generateNodes(node);
-    if (node instanceof Node)
+    if (node instanceof Node) {
       return new node.constructor({
         tag: node.tag,
         props: { ...node.props },
@@ -37,6 +37,7 @@ function generateNodes(nodes) {
         key: node.key,
         eventHandlers: { ...node.eventHandlers }
       });
+    }
     return node;
   });
 }
