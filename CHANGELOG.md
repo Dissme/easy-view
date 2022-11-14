@@ -1,5 +1,12 @@
 
 
+## [0.2.9](https://github.com/Dissme/easy-view/compare/0.2.8...0.2.9) (2022-11-14)
+
+
+### 🐛 Bug 修复
+
+* 修复卸载事件没调用的bug，修复 channel 不共享连接逻辑的bug ([a504eb7](https://github.com/Dissme/easy-view/commit/a504eb762c35d759d96dba79cd3fa1499761f441))
+
 ## [0.2.8](https://github.com/Dissme/easy-view/compare/0.2.7...0.2.8) (2022-11-06)
 
 
