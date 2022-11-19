@@ -1,5 +1,12 @@
 
 
+## [0.2.10](https://github.com/Dissme/easy-view/compare/0.2.9...0.2.10) (2022-11-19)
+
+
+### 🐛 Bug 修复
+
+* 修复 channel 没有 transfer 的能力 ([6e110ca](https://github.com/Dissme/easy-view/commit/6e110caf72f14f523f96959bfce3c0f6d587a8d8))
+
 ## [0.2.9](https://github.com/Dissme/easy-view/compare/0.2.8...0.2.9) (2022-11-14)
 
 
