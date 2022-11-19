@@ -13,10 +13,10 @@ export class Channel {
     this.#ctx.register(this.constructor.type, this.#callback);
   }
 
-  #callback = ({ detail: { method, params } }) => {
+  #callback = ({ detail: { method, params, transfers } }) => {
     const fn = this.handlers[method];
     if (!fn) throw new ReferenceError(`未注册的函数 ${method}`);
-    return fn(params);
+    return fn(params || transfers);
   };
 
   postMessage(method, params) {
@@ -27,6 +27,11 @@ export class Channel {
   sendMessage(method, params) {
     if (!this.#ctx) return;
     return this.#ctx.sendMessage(this.constructor.type, { method, params });
+  }
+
+  transfer(method, transfers) {
+    if (!this.#ctx) return;
+    this.#ctx.postMessage(this.constructor.type, { method, transfers });
   }
 
   register(method, handler) {

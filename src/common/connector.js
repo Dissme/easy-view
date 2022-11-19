@@ -94,7 +94,12 @@ export class Connector {
   }
 
   packMessage(msg, method) {
-    this.port.postMessage(msg |> this.addMethod(%, method) |> this.addHead(%));
+    const transfers = [];
+    if (msg.body?.transfers?.length) transfers.push(...msg.body.transfers);
+    this.port.postMessage(
+      msg |> this.addMethod(%, method) |> this.addHead(%),
+      transfers
+    );
   }
 
   postMessage(type, body) {
